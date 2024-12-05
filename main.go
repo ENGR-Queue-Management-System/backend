@@ -1,15 +1,14 @@
 package main
 
 import (
-	"src/db"
-
 	"log"
 	"net/http"
+	"src/api"
+	"src/db"
 
 	"github.com/joho/godotenv"
-	"github.com/labstack/echo"
-	"github.com/labstack/echo/middleware"
-
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	_ "github.com/lib/pq"
 )
 
@@ -30,6 +29,12 @@ func main() {
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
 	}))
+
+	apiV1 := e.Group("/api/v1")
+
+	// Define Routes
+	apiV1.GET("/rooms", api.GetRooms(dbConn))
+	apiV1.POST("/rooms", api.CreateRoom(dbConn))
 
 	e.Logger.Fatal(e.Start(":8000"))
 }

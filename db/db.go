@@ -8,7 +8,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-func ConnectDB() {
+func ConnectDB() *sql.DB {
 	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s "+
 		"password=%s dbname=%s sslmode=disable",
 		os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"),
@@ -25,4 +25,8 @@ func ConnectDB() {
 	}
 
 	fmt.Println("Successfully connected to DB")
+	CreateTables(db)
+	CreateRooms(db)
+	CreateUsers(db)
+	return db
 }

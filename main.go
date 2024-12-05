@@ -19,7 +19,8 @@ func main() {
 		log.Println("Error loading .env file")
 	}
 
-	db.ConnectDB()
+	dbConn := db.ConnectDB()
+	defer dbConn.Close()
 
 	e := echo.New()
 	e.Use(middleware.Logger())

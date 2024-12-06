@@ -7,7 +7,7 @@ import (
 )
 
 func RegisterRoutes(e *echo.Group, db *sql.DB) {
-	// e.POST("/authentication", Authentication(db))
+	e.POST("/authentication", Authentication(db))
 	e.GET("/rooms", GetRooms(db))
 	e.POST("/rooms", CreateRoom(db))
 }

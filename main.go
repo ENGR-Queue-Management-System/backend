@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"src/api"
 	"src/db"
 
@@ -31,10 +32,7 @@ func main() {
 	}))
 
 	apiV1 := e.Group("/api/v1")
+	api.RegisterRoutes(apiV1, dbConn)
 
-	// Define Routes
-	apiV1.GET("/rooms", api.GetRooms(dbConn))
-	apiV1.POST("/rooms", api.CreateRoom(dbConn))
-
-	e.Logger.Fatal(e.Start(":8000"))
+	e.Logger.Fatal(e.Start(":" + os.Getenv("PORT")))
 }

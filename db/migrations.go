@@ -14,8 +14,8 @@ func CreateTables(db *sql.DB) {
 		);`,
 		`CREATE TABLE IF NOT EXISTS users (
 			id SERIAL PRIMARY KEY,
-			firstName VARCHAR(100) NOT NULL,
-			lastName VARCHAR(100) NOT NULL,
+			firstName VARCHAR(100),
+			lastName VARCHAR(100),
 			email VARCHAR(100) UNIQUE NOT NULL,
 			room_id INT REFERENCES rooms(id) ON DELETE SET NULL
 		);`,
@@ -77,14 +77,14 @@ func CreateRooms(db *sql.DB) {
 
 func CreateUsers(db *sql.DB) {
 	createUsersQueries := []string{
-		`INSERT INTO users (firstName, lastName, email) 
-			VALUES ('ธนพร', 'ชาญชนะโยธิน', 'thanaporn_chan@cmu.ac.th')
+		`INSERT INTO users (email) 
+			VALUES ('thanaporn_chan@cmu.ac.th')
 			ON CONFLICT (email) DO NOTHING;`,
-		`INSERT INTO users (firstName, lastName, email) 
-			VALUES ('สวิช', 'จารึกพูนผล', 'sawit_cha@cmu.ac.th')
+		`INSERT INTO users (email) 
+			VALUES ('sawit_cha@cmu.ac.th')
 			ON CONFLICT (email) DO NOTHING;`,
-		`INSERT INTO users (firstName, lastName, email) 
-			VALUES ('วรพิชชา', 'เมืองยศ', 'worapitcha_muangyot@cmu.ac.th')
+		`INSERT INTO users (email) 
+			VALUES ('worapitcha_muangyot@cmu.ac.th')
 			ON CONFLICT (email) DO NOTHING;`,
 	}
 

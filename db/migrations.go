@@ -14,8 +14,10 @@ func CreateTables(db *sql.DB) {
 		);`,
 		`CREATE TABLE IF NOT EXISTS users (
 			id SERIAL PRIMARY KEY,
-			firstName VARCHAR(100),
-			lastName VARCHAR(100),
+			firstName_TH VARCHAR(100),
+			lastName_TH VARCHAR(100),
+			firstName_EN VARCHAR(100),
+			lastName_EN VARCHAR(100),
 			email VARCHAR(100) UNIQUE NOT NULL,
 			room_id INT REFERENCES rooms(id) ON DELETE SET NULL
 		);`,

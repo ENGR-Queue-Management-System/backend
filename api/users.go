@@ -21,7 +21,7 @@ func GetUserInfo(dbConn *sql.DB) echo.HandlerFunc {
 		}
 		row := dbConn.QueryRow("SELECT * FROM users WHERE email = $1", email)
 		var user models.User
-		err = row.Scan(&user.ID, &user.Firstname, &user.Lastname, &user.Email, &user.RoomID)
+		err = row.Scan(&user.ID, &user.FirstNameTH, &user.LastNameTH, &user.FirstNameEN, &user.LastNameEN, &user.Email, &user.RoomID)
 		if err == sql.ErrNoRows {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
 		}
@@ -49,7 +49,7 @@ func UpdateUser(dbConn *sql.DB) echo.HandlerFunc {
 		row := dbConn.QueryRow("SELECT * FROM users WHERE email = $1", email)
 
 		var updatedUser models.User
-		if err := row.Scan(&updatedUser.ID, &updatedUser.Firstname, &updatedUser.Lastname, &updatedUser.Email, &updatedUser.RoomID, &updatedUser.Room); err != nil {
+		if err := row.Scan(&updatedUser.ID, &updatedUser.FirstNameTH, &updatedUser.LastNameTH, &updatedUser.FirstNameEN, &updatedUser.LastNameEN, &updatedUser.Email, &updatedUser.RoomID, &updatedUser.Room); err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch updated user data"})
 		}
 

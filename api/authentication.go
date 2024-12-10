@@ -183,7 +183,7 @@ func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 
 		row := dbConn.QueryRow("SELECT * FROM users WHERE email = $1", basicInfo.CmuitAccount)
 		var user models.User
-		err = row.Scan(&user.ID, &user.Firstname, &user.Lastname, &user.Email, &user.RoomID)
+		err = row.Scan(&user.ID, &user.FirstNameTH, &user.LastNameTH, &user.FirstNameEN, &user.LastNameEN, &user.Email, &user.RoomID)
 		if err == sql.ErrNoRows {
 			if basicInfo.ItAccountTypeID == STUDENT.String() {
 				tokenString, err := generateJWTToken(*basicInfo, true)
@@ -204,14 +204,16 @@ func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to generate JWT token"})
 		}
 
-		if user.Firstname == nil || user.Lastname == nil {
-			updateQuery := `UPDATE users SET firstname = $1, lastname = $2 WHERE email = $3`
-			_, err := dbConn.Exec(updateQuery, basicInfo.FirstnameTH, basicInfo.LastnameTH, basicInfo.CmuitAccount)
+		if user.FirstNameEN == nil || user.LastNameEN == nil {
+			updateQuery := `UPDATE users SET firstname_th = $1, lastname_th = $2, firstname_en = $3, lastname_en = $4 WHERE email = $5`
+			_, err := dbConn.Exec(updateQuery, basicInfo.FirstnameTH, basicInfo.LastnameTH, basicInfo.FirstnameEN, basicInfo.LastnameEN, basicInfo.CmuitAccount)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update user data"})
 			}
-			user.Firstname = &basicInfo.FirstnameTH
-			user.Lastname = &basicInfo.LastnameTH
+			user.FirstNameTH = &basicInfo.FirstnameTH
+			user.LastNameTH = &basicInfo.LastnameTH
+			user.FirstNameEN = &basicInfo.FirstnameEN
+			user.LastNameEN = &basicInfo.LastnameEN
 		}
 
 		return c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{

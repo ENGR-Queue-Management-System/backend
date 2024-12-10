@@ -19,12 +19,14 @@ type Topic struct {
 }
 
 type User struct {
-	ID        uint    `json:"id"`
-	Firstname *string `json:"firstname"`
-	Lastname  *string `json:"lastname"`
-	Email     string  `json:"email"`
-	RoomID    *uint   `json:"roomId"`
-	Room      *Room   `json:"room"`
+	ID          uint    `json:"id"`
+	FirstNameTH *string `json:"firstNameTH"`
+	LastNameTH  *string `json:"lastNameTH"`
+	FirstNameEN *string `json:"firstNameEN"`
+	LastNameEN  *string `json:"lastNameEN"`
+	Email       string  `json:"email"`
+	RoomID      *uint   `json:"roomId"`
+	Room        *Room   `json:"room"`
 }
 
 type Feedback struct {

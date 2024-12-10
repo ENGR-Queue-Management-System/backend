@@ -10,6 +10,7 @@ func RegisterRoutes(e *echo.Group, db *sql.DB) {
 	e.POST("/authentication", Authentication(db))
 
 	e.GET("/user", GetUserInfo(db))
+	e.PUT("/user", UpdateUser(db))
 
 	e.GET("/room", GetRooms(db))
 	e.POST("/room", CreateRoom(db))

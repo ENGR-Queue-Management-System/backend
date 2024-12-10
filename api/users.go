@@ -41,7 +41,7 @@ func UpdateUser(dbConn *sql.DB) echo.HandlerFunc {
 		if err := c.Bind(body); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid input"})
 		}
-		_, err = dbConn.Exec("UPDATE users SET name = $1 WHERE email = $2", body.Room, email)
+		_, err = dbConn.Exec("UPDATE users SET room_id = $1 WHERE email = $2", body.Room, email)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update user"})
 		}
@@ -49,7 +49,7 @@ func UpdateUser(dbConn *sql.DB) echo.HandlerFunc {
 		row := dbConn.QueryRow("SELECT * FROM users WHERE email = $1", email)
 
 		var updatedUser models.User
-		if err := row.Scan(&updatedUser.ID, &updatedUser.FirstNameTH, &updatedUser.LastNameTH, &updatedUser.FirstNameEN, &updatedUser.LastNameEN, &updatedUser.Email, &updatedUser.RoomID, &updatedUser.Room); err != nil {
+		if err := row.Scan(&updatedUser.ID, &updatedUser.FirstNameTH, &updatedUser.LastNameTH, &updatedUser.FirstNameEN, &updatedUser.LastNameEN, &updatedUser.Email, &updatedUser.RoomID); err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch updated user data"})
 		}
 

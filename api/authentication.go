@@ -132,7 +132,7 @@ func getCMUBasicInfo(accessToken string) (*CmuOAuthBasicInfoDTO, error) {
 	return &info, nil
 }
 
-func generateJWTToken(user CmuOAuthBasicInfoDTO) (string, error) {
+func generateJWTToken(user CmuOAuthBasicInfoDTO, notAdmin bool) (string, error) {
 	firstName := user.FirstnameTH
 	if firstName == "" {
 		firstName = helpers.Capitalize(user.FirstnameEN)
@@ -148,7 +148,7 @@ func generateJWTToken(user CmuOAuthBasicInfoDTO) (string, error) {
 		"faculty":   user.OrganizationNameTH,
 	}
 
-	if user.StudentID != "" {
+	if user.StudentID != "" && notAdmin {
 		claims["studentId"] = user.StudentID
 	}
 
@@ -180,17 +180,16 @@ func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 		if err != nil || basicInfo == nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Cannot get CMU basic info"})
 		}
-		tokenString, err := generateJWTToken(*basicInfo)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to generate JWT token"})
-		}
 
-		query := "SELECT * FROM users WHERE email = ?"
-		user := dbConn.QueryRow(query, basicInfo.CmuitAccount)
-		var userData models.User
-		err = user.Scan(&userData.ID, &userData.Firstname, &userData.Lastname, &userData.Email, &userData.RoomID, &userData.Room)
+		row := dbConn.QueryRow("SELECT * FROM users WHERE email = $1", basicInfo.CmuitAccount)
+		var user models.User
+		err = row.Scan(&user.ID, &user.Firstname, &user.Lastname, &user.Email, &user.RoomID)
 		if err == sql.ErrNoRows {
 			if basicInfo.ItAccountTypeID == STUDENT.String() {
+				tokenString, err := generateJWTToken(*basicInfo, true)
+				if err != nil {
+					return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to generate JWT token"})
+				}
 				return c.JSON(http.StatusOK, map[string]interface{}{
 					"token": tokenString,
 				})
@@ -200,19 +199,24 @@ func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 				})
 			}
 		}
-		if userData.Firstname == nil || userData.Lastname == nil {
+		tokenString, err := generateJWTToken(*basicInfo, false)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to generate JWT token"})
+		}
+
+		if user.Firstname == nil || user.Lastname == nil {
 			updateQuery := `UPDATE users SET firstname = $1, lastname = $2 WHERE email = $3`
 			_, err := dbConn.Exec(updateQuery, basicInfo.FirstnameTH, basicInfo.LastnameTH, basicInfo.CmuitAccount)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update user data"})
 			}
-			userData.Firstname = &basicInfo.FirstnameTH
-			userData.Lastname = &basicInfo.LastnameTH
+			user.Firstname = &basicInfo.FirstnameTH
+			user.Lastname = &basicInfo.LastnameTH
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"token": tokenString,
-			"user":  userData,
+			"user":  user,
 		})
 	}
 }

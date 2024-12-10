@@ -25,7 +25,7 @@ func GetUserInfo(dbConn *sql.DB) echo.HandlerFunc {
 		if err == sql.ErrNoRows {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
 		}
-		return c.JSON(http.StatusOK, user)
+		return c.JSON(http.StatusOK, helpers.FormatSuccessResponse(user))
 	}
 }
 
@@ -53,6 +53,6 @@ func UpdateUser(dbConn *sql.DB) echo.HandlerFunc {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch updated user data"})
 		}
 
-		return c.JSON(http.StatusOK, updatedUser)
+		return c.JSON(http.StatusOK, helpers.FormatSuccessResponse(updatedUser))
 	}
 }

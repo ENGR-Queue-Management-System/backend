@@ -214,9 +214,9 @@ func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 			user.Lastname = &basicInfo.LastnameTH
 		}
 
-		return c.JSON(http.StatusOK, map[string]interface{}{
+		return c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{
 			"token": tokenString,
 			"user":  user,
-		})
+		}))
 	}
 }

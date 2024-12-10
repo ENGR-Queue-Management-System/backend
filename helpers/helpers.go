@@ -8,6 +8,13 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+func FormatSuccessResponse(data interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"message": "success",
+		"data":    data,
+	}
+}
+
 func ExtractEmailFromToken(c echo.Context) (string, error) {
 	authHeader := c.Request().Header.Get("Authorization")
 	if !strings.HasPrefix(authHeader, "Bearer ") {

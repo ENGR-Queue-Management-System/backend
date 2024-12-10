@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"net/http"
+	"src/helpers"
 
 	"github.com/labstack/echo/v4"
 )
@@ -32,8 +33,7 @@ func GetRooms(dbConn *sql.DB) echo.HandlerFunc {
 		if err := rows.Err(); err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Error iterating rooms"})
 		}
-
-		return c.JSON(http.StatusOK, rooms)
+		return c.JSON(http.StatusOK, helpers.FormatSuccessResponse(rooms))
 	}
 }
 

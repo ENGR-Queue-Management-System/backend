@@ -1,8 +1,37 @@
 package helpers
 
 import (
+	"net/http"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/labstack/echo/v4"
 )
+
+func ExtractEmailFromToken(c echo.Context) (string, error) {
+	authHeader := c.Request().Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid authorization header")
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	token, _, err := jwt.NewParser().ParseUnverified(tokenString, jwt.MapClaims{})
+	if err != nil {
+		return "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || claims["email"] == nil {
+		return "", echo.NewHTTPError(http.StatusUnauthorized, "Email not found in token")
+	}
+
+	email, ok := claims["email"].(string)
+	if !ok {
+		return "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid email in token")
+	}
+
+	return email, nil
+}
 
 func Capitalize(s string) string {
 	if len(s) > 0 {

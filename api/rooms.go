@@ -56,3 +56,22 @@ func CreateRoom(dbConn *sql.DB) echo.HandlerFunc {
 		return c.JSON(http.StatusCreated, map[string]string{"message": "Room created successfully"})
 	}
 }
+
+// DeleteRoom handles deleting a room by its ID
+func DeleteRoom(dbConn *sql.DB) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		id := c.Param("id")
+		result, err := dbConn.Exec("DELETE FROM rooms WHERE id = $1", id)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to delete room"})
+		}
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to verify deletion"})
+		}
+		if rowsAffected == 0 {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "Room not found"})
+		}
+		return c.JSON(http.StatusOK, map[string]string{"message": "Room deleted successfully"})
+	}
+}

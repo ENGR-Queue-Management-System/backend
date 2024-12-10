@@ -23,7 +23,7 @@ func ConnectDB() *sql.DB {
 		panic(err)
 	}
 
-	fmt.Println("Successfully connected to DB")
+	fmt.Println("The database is connected")
 	CreateTables(db)
 	CreateRooms(db)
 	CreateUsers(db)

@@ -9,9 +9,8 @@ import (
 	"os"
 	"src/helpers"
 	"src/models"
-	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 )
 
@@ -153,8 +152,8 @@ func generateJWTToken(user CmuOAuthBasicInfoDTO) (string, error) {
 		claims["studentId"] = user.StudentID
 	}
 
-	expirationTime := time.Now().Add(7 * 24 * time.Hour)
-	claims["exp"] = expirationTime.Unix()
+	// expirationTime := time.Now().Add(7 * 24 * time.Hour)
+	// claims["exp"] = expirationTime.Unix()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
@@ -189,7 +188,7 @@ func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 		query := "SELECT * FROM users WHERE email = ?"
 		user := dbConn.QueryRow(query, basicInfo.CmuitAccount)
 		var userData models.User
-		err = user.Scan(&userData)
+		err = user.Scan(&userData.ID, &userData.Firstname, &userData.Lastname, &userData.Email, &userData.RoomID, &userData.Room)
 		if err == sql.ErrNoRows {
 			if basicInfo.ItAccountTypeID == STUDENT.String() {
 				return c.JSON(http.StatusOK, map[string]interface{}{
@@ -200,12 +199,15 @@ func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 					"message": "Cannot access",
 				})
 			}
-		} else if userData.Firstname == "" || userData.Lastname == "" {
-			updateQuery := `UPDATE users SET firstname = ?, lastname = ? WHERE email = ?`
+		}
+		if userData.Firstname == nil || userData.Lastname == nil {
+			updateQuery := `UPDATE users SET firstname = $1, lastname = $2 WHERE email = $3`
 			_, err := dbConn.Exec(updateQuery, basicInfo.FirstnameTH, basicInfo.LastnameTH, basicInfo.CmuitAccount)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update user data"})
 			}
+			userData.Firstname = &basicInfo.FirstnameTH
+			userData.Lastname = &basicInfo.LastnameTH
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{

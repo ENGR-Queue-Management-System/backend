@@ -25,7 +25,6 @@ func ConnectDB() *sql.DB {
 
 	fmt.Println("The database is connected")
 	CreateTables(db)
-	CreateRooms(db)
 	CreateUsers(db)
 	return db
 }

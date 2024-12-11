@@ -19,20 +19,28 @@ func main() {
 		log.Println("Error loading .env file")
 	}
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		log.Fatal("PORT environment variable is not set")
+	}
+
 	dbConn := db.ConnectDB()
+	if err != nil {
+		log.Fatalf("Failed to connect to the database: %v", err)
+	}
 	defer dbConn.Close()
 
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
 	}))
+	e.Use(middleware.BodyLimit("2M"))
 
 	apiV1 := e.Group("/api/v1")
 	api.RegisterRoutes(apiV1, dbConn)
 
-	e.Logger.Fatal(e.Start(":" + os.Getenv("PORT")))
+	e.Logger.Fatal(e.Start(":" + port))
 }

@@ -183,7 +183,7 @@ func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 
 		row := dbConn.QueryRow("SELECT * FROM users WHERE email = $1", basicInfo.CmuitAccount)
 		var user models.User
-		err = row.Scan(&user.ID, &user.FirstNameTH, &user.LastNameTH, &user.FirstNameEN, &user.LastNameEN, &user.Email, &user.RoomID)
+		err = row.Scan(&user.ID, &user.FirstNameTH, &user.LastNameTH, &user.FirstNameEN, &user.LastNameEN, &user.Email, &user.CounterID)
 		if err == sql.ErrNoRows {
 			if basicInfo.ItAccountTypeID == STUDENT.String() {
 				tokenString, err := generateJWTToken(*basicInfo, true)

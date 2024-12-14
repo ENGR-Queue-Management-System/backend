@@ -1,6 +1,6 @@
 module src
 
-go 1.23.3
+go 1.23
 
 require (
 	github.com/SherClockHolmes/webpush-go v1.3.0

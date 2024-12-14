@@ -1,0 +1,10 @@
+[build]
+  # Output directory for the Go build
+  command = "go build -o myapp"
+  publish = "."
+
+[[redirects]]
+  # Redirect all traffic to the Go binary
+  from = "/*"
+  to = "/myapp"
+  status = 200

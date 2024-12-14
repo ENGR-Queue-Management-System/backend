@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+type Subscription struct {
+	StudentID string `json:"studentId"`
+	Endpoint  string `json:"endpoint"`
+	Auth      string `json:"auth"`
+	P256dh    string `json:"p256dh"`
+}
+
 type Counter struct {
 	ID         uint      `json:"id"`
 	Counter    string    `json:"counter"`
@@ -12,7 +19,7 @@ type Counter struct {
 	TimeClosed time.Time `json:"timeClosed"`
 }
 
-type CounterWithUsers struct {
+type CounterWithUser struct {
 	ID         int      `json:"id"`
 	Counter    string   `json:"counter"`
 	Status     bool     `json:"status"`

@@ -21,9 +21,9 @@ func GetCounters(dbConn *sql.DB) echo.HandlerFunc {
 		}
 		defer rows.Close()
 
-		var counters []models.CounterWithUsers
+		var counters []models.CounterWithUser
 		for rows.Next() {
-			var counter models.CounterWithUsers
+			var counter models.CounterWithUser
 			var timeClosed time.Time
 			var user models.UserOnly
 			if err := rows.Scan(

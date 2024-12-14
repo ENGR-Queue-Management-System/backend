@@ -8,6 +8,12 @@ import (
 
 func CreateTables(db *sql.DB) {
 	createTableQueries := []string{
+		`CREATE TABLE IF NOT EXISTS subscriptions (
+			student_id CHAR(9) PRIMARY KEY,
+			endpoint TEXT NOT NULL,
+			auth TEXT NOT NULL,
+			p256dh TEXT NOT NULL
+		);`,
 		`CREATE TABLE IF NOT EXISTS counters (
 			id SERIAL PRIMARY KEY,
 			counter CHAR(1) UNIQUE NOT NULL,

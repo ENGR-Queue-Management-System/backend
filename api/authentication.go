@@ -190,9 +190,9 @@ func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 				if err != nil {
 					return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to generate JWT token"})
 				}
-				return c.JSON(http.StatusOK, map[string]interface{}{
+				return c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{
 					"token": tokenString,
-				})
+				}))
 			} else {
 				return c.JSON(http.StatusForbidden, map[string]interface{}{
 					"message": "Cannot access",

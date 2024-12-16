@@ -45,6 +45,11 @@ func (r CMU_OAUTH_ROLE) String() string {
 }
 
 type LoginDTO struct {
+	FirstName string `json:"firstName" validate:"required"`
+	LastName  string `json:"lastName" validate:"required"`
+}
+
+type AuthDTO struct {
 	Code        string `json:"code" validate:"required"`
 	RedirectURI string `json:"redirectUri" validate:"required"`
 }
@@ -132,25 +137,30 @@ func getCMUBasicInfo(accessToken string) (*CmuOAuthBasicInfoDTO, error) {
 	return &info, nil
 }
 
-func generateJWTToken(user CmuOAuthBasicInfoDTO, notAdmin bool) (string, error) {
-	firstName := user.FirstnameTH
-	if firstName == "" {
-		firstName = helpers.Capitalize(user.FirstnameEN)
+func generateJWTToken(user interface{}, notAdmin bool) (string, error) {
+	var firstName, lastName string
+	claims := jwt.MapClaims{}
+	switch v := user.(type) {
+	case CmuOAuthBasicInfoDTO:
+		claims["email"] = v.CmuitAccount
+		firstName = v.FirstnameTH
+		lastName = v.LastnameTH
+		if v.StudentID != "" && notAdmin {
+			claims["studentId"] = v.StudentID
+		}
+		if firstName == "" {
+			firstName = helpers.Capitalize(v.FirstnameEN)
+		}
+		if lastName == "" {
+			lastName = helpers.Capitalize(v.LastnameEN)
+		}
+		claims["faculty"] = v.OrganizationNameTH
+	case LoginDTO:
+		firstName = v.FirstName
+		lastName = v.LastName
 	}
-	lastName := user.LastnameTH
-	if lastName == "" {
-		lastName = helpers.Capitalize(user.LastnameEN)
-	}
-	claims := jwt.MapClaims{
-		"email":     user.CmuitAccount,
-		"firstName": firstName,
-		"lastName":  lastName,
-		"faculty":   user.OrganizationNameTH,
-	}
-
-	if user.StudentID != "" && notAdmin {
-		claims["studentId"] = user.StudentID
-	}
+	claims["firstName"] = firstName
+	claims["lastName"] = lastName
 
 	// expirationTime := time.Now().Add(7 * 24 * time.Hour)
 	// claims["exp"] = expirationTime.Unix()
@@ -168,7 +178,7 @@ func generateJWTToken(user CmuOAuthBasicInfoDTO, notAdmin bool) (string, error) 
 
 func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		var body LoginDTO
+		var body AuthDTO
 		if err := c.Bind(&body); err != nil || body.Code == "" || body.RedirectURI == "" {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid authorization code or redirect URI"})
 		}
@@ -219,6 +229,22 @@ func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 		return c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{
 			"token": tokenString,
 			"user":  user,
+		}))
+	}
+}
+
+func Login() echo.HandlerFunc {
+	return func(c echo.Context) error {
+		var body LoginDTO
+		if err := c.Bind(&body); err != nil || body.FirstName == "" || body.LastName == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid firstname or lastname"})
+		}
+		tokenString, err := generateJWTToken(body, true)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to generate JWT token"})
+		}
+		return c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{
+			"token": tokenString,
 		}))
 	}
 }

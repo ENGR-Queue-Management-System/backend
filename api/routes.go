@@ -60,7 +60,10 @@ func RegisterRoutes(e *echo.Group, db *sql.DB) {
 	e.POST("/send-notification", SendNotificationTrigger(db))
 
 	e.POST("/authentication", Authentication(db))
+	e.POST("/login", Login())
+
 	e.GET("/user", GetUserInfo(db))
+
 	e.GET("/counter", GetCounters(db))
 	e.POST("/counter", CreateCounter(db))
 	e.DELETE("/counter/:id", DeleteCounter(db))

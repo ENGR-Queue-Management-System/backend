@@ -1,4 +1,21 @@
+name: project_queue
+
 services:
+  backend:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: backend
+    restart: always
+    ports:
+      - 8000:8000
+    depends_on:
+      - db
+    env_file:
+      - .env
+    volumes:
+      - .:/usr/src/app
+
   db:
     container_name: db
     image: postgres:13

@@ -15,6 +15,8 @@ services:
       - .env
     volumes:
       - .:/usr/src/app
+    networks:
+      - project_queue_network
 
   db:
     container_name: db
@@ -27,6 +29,12 @@ services:
       - 5432:5432
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - project_queue_network
+
+networks:
+  project_queue_network:
+    driver: bridge
 
 volumes:
   pgdata: {}

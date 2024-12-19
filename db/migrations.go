@@ -9,8 +9,8 @@ import (
 func CreateTables(db *sql.DB) {
 	createTableQueries := []string{
 		`CREATE TABLE IF NOT EXISTS subscriptions (
-			firstName VARCHAR(100) NOT NULL,
-			lastName VARCHAR(100) NOT NULL,
+			firstname VARCHAR(100) NOT NULL,
+			lastname VARCHAR(100) NOT NULL,
 			endpoint TEXT NOT NULL,
 			auth TEXT NOT NULL,
 			p256dh TEXT NOT NULL,
@@ -24,16 +24,17 @@ func CreateTables(db *sql.DB) {
 		);`,
 		`CREATE TABLE IF NOT EXISTS users (
 			id SERIAL PRIMARY KEY,
-			firstName_TH VARCHAR(100),
-			lastName_TH VARCHAR(100),
-			firstName_EN VARCHAR(100),
-			lastName_EN VARCHAR(100),
+			firstName_th VARCHAR(100),
+			lastName_th VARCHAR(100),
+			firstName_en VARCHAR(100),
+			lastName_en VARCHAR(100),
 			email VARCHAR(100) UNIQUE NOT NULL,
 			counter_id INT REFERENCES counters(id) ON DELETE CASCADE
 		);`,
 		`CREATE TABLE IF NOT EXISTS topics (
 			id SERIAL PRIMARY KEY,
-			topic VARCHAR(255) UNIQUE NOT NULL,
+			topic_th VARCHAR(255) UNIQUE NOT NULL,
+			topic_en VARCHAR(255) UNIQUE NOT NULL,
 			code CHAR(1) UNIQUE NOT NULL
 		);`,
 		`CREATE TABLE IF NOT EXISTS counter_topics (

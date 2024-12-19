@@ -49,9 +49,10 @@ type UserOnly struct {
 }
 
 type Topic struct {
-	ID    uint   `json:"id"`
-	Topic string `json:"topic"`
-	Code  string `json:"code"`
+	ID      uint   `json:"id"`
+	TopicTH string `json:"topicTH"`
+	TopicEN string `json:"topicEN"`
+	Code    string `json:"code"`
 }
 
 type CounterTopic struct {

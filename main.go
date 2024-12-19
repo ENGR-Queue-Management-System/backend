@@ -31,6 +31,9 @@ func main() {
 	defer dbConn.Close()
 
 	e := echo.New()
+	e.Use(middleware.Rewrite(map[string]string{
+		"^/api/v1/*": "/$1",
+	}))
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{

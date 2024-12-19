@@ -6,7 +6,8 @@ import (
 )
 
 type Subscription struct {
-	StudentID string `json:"studentId"`
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
 	Endpoint  string `json:"endpoint"`
 	Auth      string `json:"auth"`
 	P256dh    string `json:"p256dh"`
@@ -48,10 +49,16 @@ type UserOnly struct {
 }
 
 type Topic struct {
-	ID        uint    `json:"id"`
-	Topic     string  `json:"topic"`
+	ID    uint   `json:"id"`
+	Topic string `json:"topic"`
+	Code  string `json:"code"`
+}
+
+type CounterTopic struct {
 	CounterID uint    `json:"counterId"`
+	TopicID   uint    `json:"topicId"`
 	Counter   Counter `json:"counter"`
+	Topic     Topic   `json:"topic"`
 }
 
 type Queue struct {

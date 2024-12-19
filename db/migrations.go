@@ -9,10 +9,12 @@ import (
 func CreateTables(db *sql.DB) {
 	createTableQueries := []string{
 		`CREATE TABLE IF NOT EXISTS subscriptions (
-			student_id CHAR(9) PRIMARY KEY,
+			firstName VARCHAR(100) NOT NULL,
+			lastName VARCHAR(100) NOT NULL,
 			endpoint TEXT NOT NULL,
 			auth TEXT NOT NULL,
-			p256dh TEXT NOT NULL
+			p256dh TEXT NOT NULL,
+			PRIMARY KEY (firstName, lastName)
 		);`,
 		`CREATE TABLE IF NOT EXISTS counters (
 			id SERIAL PRIMARY KEY,
@@ -32,12 +34,17 @@ func CreateTables(db *sql.DB) {
 		`CREATE TABLE IF NOT EXISTS topics (
 			id SERIAL PRIMARY KEY,
 			topic VARCHAR(255) UNIQUE NOT NULL,
-			counter_id INT REFERENCES counters(id) ON DELETE CASCADE
+			code CHAR(1) UNIQUE NOT NULL
+		);`,
+		`CREATE TABLE IF NOT EXISTS counter_topics (
+			counter_id INT NOT NULL REFERENCES counters(id) ON DELETE CASCADE,
+			topic_id INT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+			PRIMARY KEY (counter_id, topic_id)
 		);`,
 		`CREATE TABLE IF NOT EXISTS queues (
 			id SERIAL PRIMARY KEY,
 			no VARCHAR(100) NOT NULL,
-			student_id CHAR(9) NOT NULL,
+			student_id CHAR(9),
 			firstName VARCHAR(100) NOT NULL,
 			lastName VARCHAR(100) NOT NULL,
 			topic_id INT REFERENCES topics(id) ON DELETE CASCADE ON UPDATE CASCADE,

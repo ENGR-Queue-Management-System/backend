@@ -40,9 +40,6 @@ func main() {
 	e.Use(middleware.BodyLimit("2M"))
 
 	apiV1 := e.Group("/api/v1")
-	apiV1.GET("/test", func(c echo.Context) error {
-		return c.String(http.StatusOK, "API is working!")
-	})
 	api.RegisterRoutes(apiV1, dbConn)
 
 	e.Logger.Fatal(e.Start(":" + port))

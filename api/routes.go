@@ -20,9 +20,13 @@ func SaveSubscription(db *sql.DB) echo.HandlerFunc {
 			return echo.NewHTTPError(http.StatusUnauthorized, "Invalid token")
 		}
 		claims := token.Claims.(jwt.MapClaims)
-		studentId, ok := claims["studentId"].(string)
+		firstName, ok := claims["firstName"].(string)
 		if !ok {
-			return echo.NewHTTPError(http.StatusBadRequest, "Invalid studentId in token")
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid firstName in token")
+		}
+		lastName, ok := claims["lastName"].(string)
+		if !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid lastName in token")
 		}
 
 		subscription := new(struct {
@@ -37,12 +41,13 @@ func SaveSubscription(db *sql.DB) echo.HandlerFunc {
 		}
 
 		var savedSubscription models.Subscription
-		query := `INSERT INTO subscriptions (student_id, endpoint, auth, p256dh) VALUES ($1, $2, $3, $4)
-							ON CONFLICT (student_id, endpoint) DO UPDATE
+		query := `INSERT INTO subscriptions (firstName, lastName, endpoint, auth, p256dh) VALUES ($1, $2, $3, $4, $5)
+							ON CONFLICT (firstName, lastName, endpoint) DO UPDATE
 							SET auth = EXCLUDED.auth, p256dh = EXCLUDED.p256dh
 							RETURNING *`
-		err = db.QueryRow(query, studentId, subscription.Endpoint, subscription.Keys.Auth, subscription.Keys.P256dh).Scan(
-			&savedSubscription.StudentID,
+		err = db.QueryRow(query, firstName, lastName, subscription.Endpoint, subscription.Keys.Auth, subscription.Keys.P256dh).Scan(
+			&savedSubscription.FirstName,
+			&savedSubscription.LastName,
 			&savedSubscription.Endpoint,
 			&savedSubscription.Auth,
 			&savedSubscription.P256dh,

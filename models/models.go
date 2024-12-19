@@ -55,16 +55,16 @@ type Topic struct {
 }
 
 type Queue struct {
-	ID          uint           `json:"id"`
-	No          string         `json:"no"`
-	StudentID   string         `json:"studentId"`
-	Firstname   string         `json:"firstName"`
-	Lastname    string         `json:"lastName"`
-	TopicID     uint           `json:"topicId"`
-	Topic       Topic          `json:"topic"`
-	Description string         `json:"description"`
-	Status      helpers.STATUS `json:"status"`
-	CreatedAt   time.Time      `json:"createdAt"`
+	ID        uint           `json:"id"`
+	No        string         `json:"no"`
+	StudentID string         `json:"studentId"`
+	Firstname string         `json:"firstName"`
+	Lastname  string         `json:"lastName"`
+	TopicID   uint           `json:"topicId"`
+	Topic     Topic          `json:"topic"`
+	Note      string         `json:"note"`
+	Status    helpers.STATUS `json:"status"`
+	CreatedAt time.Time      `json:"createdAt"`
 }
 
 type Feedback struct {

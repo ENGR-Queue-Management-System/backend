@@ -32,6 +32,5 @@ func ConnectDB() *sql.DB {
 
 	fmt.Println("The database is connected")
 	CreateTables(db)
-	CreateUsers(db)
 	return db
 }

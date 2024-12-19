@@ -45,6 +45,7 @@ func (r CMU_OAUTH_ROLE) String() string {
 }
 
 type LoginDTO struct {
+	Topic     int    `json:"topic" validate:"required"`
 	FirstName string `json:"firstName" validate:"required"`
 	LastName  string `json:"lastName" validate:"required"`
 }
@@ -233,7 +234,7 @@ func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 	}
 }
 
-func Login() echo.HandlerFunc {
+func ReserveNotLogin() echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var body LoginDTO
 		if err := c.Bind(&body); err != nil || body.FirstName == "" || body.LastName == "" {

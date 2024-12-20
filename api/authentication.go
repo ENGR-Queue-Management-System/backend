@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"src/helpers"
@@ -45,9 +47,10 @@ func (r CMU_OAUTH_ROLE) String() string {
 }
 
 type LoginDTO struct {
-	Topic     int    `json:"topic" validate:"required"`
-	FirstName string `json:"firstName" validate:"required"`
-	LastName  string `json:"lastName" validate:"required"`
+	Topic     int     `json:"topic" validate:"required"`
+	Note      *string `json:"note"`
+	FirstName string  `json:"firstName" validate:"required"`
+	LastName  string  `json:"lastName" validate:"required"`
 }
 
 type AuthDTO struct {
@@ -234,7 +237,7 @@ func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 	}
 }
 
-func ReserveNotLogin() echo.HandlerFunc {
+func ReserveNotLogin(dbConn *sql.DB) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var body LoginDTO
 		if err := c.Bind(&body); err != nil || body.FirstName == "" || body.LastName == "" || body.Topic == 0 {
@@ -243,6 +246,48 @@ func ReserveNotLogin() echo.HandlerFunc {
 		tokenString, err := generateJWTToken(body, true)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to generate JWT token"})
+		}
+
+		var topicCode string
+		topicQuery := `SELECT code FROM topics WHERE id = $1`
+		err = dbConn.QueryRow(topicQuery, body.Topic).Scan(&topicCode)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to retrieve topic code"})
+		}
+
+		var lastQueueNo string
+		query := `SELECT no FROM queues WHERE topic_id = $1 ORDER BY created_at DESC LIMIT 1`
+		err = dbConn.QueryRow(query, body.Topic).Scan(&lastQueueNo)
+		if err != nil && err != sql.ErrNoRows {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to retrieve the last queue number"})
+		}
+
+		var newQueueNo string
+		if lastQueueNo != "" {
+			var numPart int
+			_, err := fmt.Sscanf(lastQueueNo, topicCode+"%03d", &numPart)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to parse the last queue number"})
+			}
+			numPart++
+			newQueueNo = fmt.Sprintf("%s%03d", topicCode, numPart)
+		} else {
+			newQueueNo = fmt.Sprintf("%s001", topicCode)
+		}
+
+		var note interface{}
+		if body.Note == nil {
+			note = nil
+		} else {
+			note = *body.Note
+		}
+
+		insertQuery := `INSERT INTO queues (no, firstName, lastName, topic_id, note) 
+						VALUES ($1, $2, $3, $4, $5) RETURNING id`
+		_, err = dbConn.Exec(insertQuery, newQueueNo, body.FirstName, body.LastName, body.Topic, note)
+		if err != nil {
+			log.Printf("Error inserting queue: %v", err)
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create queue"})
 		}
 
 		return c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{

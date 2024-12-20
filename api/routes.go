@@ -65,7 +65,7 @@ func RegisterRoutes(e *echo.Group, db *sql.DB) {
 	e.POST("/send-notification", SendNotificationTrigger(db))
 
 	e.POST("/authentication", Authentication(db))
-	e.POST("/reserve", ReserveNotLogin())
+	e.POST("/reserve", ReserveNotLogin(db))
 
 	e.GET("/user", GetUserInfo(db))
 

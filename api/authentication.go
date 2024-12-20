@@ -237,13 +237,14 @@ func Authentication(dbConn *sql.DB) echo.HandlerFunc {
 func ReserveNotLogin() echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var body LoginDTO
-		if err := c.Bind(&body); err != nil || body.FirstName == "" || body.LastName == "" {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid firstname or lastname"})
+		if err := c.Bind(&body); err != nil || body.FirstName == "" || body.LastName == "" || body.Topic == 0 {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid firstname or lastname or topic"})
 		}
 		tokenString, err := generateJWTToken(body, true)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to generate JWT token"})
 		}
+
 		return c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{
 			"token": tokenString,
 		}))

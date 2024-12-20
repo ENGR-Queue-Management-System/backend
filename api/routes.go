@@ -71,10 +71,11 @@ func RegisterRoutes(e *echo.Group, db *sql.DB) {
 
 	e.GET("/counter", GetCounters(db))
 	e.POST("/counter", CreateCounter(db))
+	e.PUT("/counter/:id", UpdateCounter(db))
 	e.DELETE("/counter/:id", DeleteCounter(db))
 
 	e.GET("/topic", GetTopics(db))
 	e.POST("/topic", CreateTopic(db))
-	e.PUT("/topic", UpdateTopic(db))
+	e.PUT("/topic/:id", UpdateTopic(db))
 	e.DELETE("/topic/:id", DeleteTopic(db))
 }

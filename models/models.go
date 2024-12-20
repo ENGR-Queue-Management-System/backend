@@ -20,12 +20,13 @@ type Counter struct {
 	TimeClosed time.Time `json:"timeClosed"`
 }
 
-type CounterWithUser struct {
+type CounterWithUserWithTopics struct {
 	ID         int      `json:"id"`
 	Counter    string   `json:"counter"`
 	Status     bool     `json:"status"`
 	TimeClosed string   `json:"timeClosed"`
 	User       UserOnly `json:"user"`
+	Topic      []Topic  `json:"topic"`
 }
 
 type User struct {

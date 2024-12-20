@@ -46,3 +46,14 @@ func Capitalize(s string) string {
 	}
 	return s
 }
+
+func Join(arr []string, separator string) string {
+	result := ""
+	for i, s := range arr {
+		if i > 0 {
+			result += separator
+		}
+		result += s
+	}
+	return result
+}

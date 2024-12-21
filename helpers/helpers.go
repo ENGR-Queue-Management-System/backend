@@ -27,9 +27,7 @@ func ExtractEmailFromToken(c *gin.Context) (string, error) {
 	if secretKey == "" {
 		return "", fmt.Errorf("JWT secret key is not set")
 	}
-	token, err := jwt.ParseWithClaims(tokenString, &jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return []byte(secretKey), nil
-	})
+	token, _, err := jwt.NewParser().ParseUnverified(tokenString, jwt.MapClaims{})
 	if err != nil || !token.Valid {
 		return "", fmt.Errorf("Invalid token")
 	}

@@ -32,22 +32,23 @@ func SaveSubscription(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		subscription := new(struct {
+		var subscription struct {
 			Endpoint string `json:"endpoint"`
 			Keys     struct {
 				Auth   string `json:"auth"`
 				P256dh string `json:"p256dh"`
-			}
-		})
-		if err := c.Bind(&subscription); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			} `json:"keys"`
+		}
+		if err := c.ShouldBindJSON(&subscription); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON payload: " + err.Error()})
 			return
 		}
 
 		var savedSubscription models.Subscription
-		query := `INSERT INTO subscriptions (firstName, lastName, endpoint, auth, p256dh) VALUES ($1, $2, $3, $4, $5)
-							ON CONFLICT (firstName, lastName, endpoint) DO UPDATE
-							SET auth = EXCLUDED.auth, p256dh = EXCLUDED.p256dh
+		query := `INSERT INTO subscriptions (firstname, lastname, endpoint, auth, p256dh)
+							VALUES ($1, $2, $3, $4, $5)
+							ON CONFLICT (firstname, lastname) DO UPDATE
+							SET endpoint = EXCLUDED.endpoint, auth = EXCLUDED.auth, p256dh = EXCLUDED.p256dh
 							RETURNING *`
 		err = db.QueryRow(query, firstName, lastName, subscription.Endpoint, subscription.Keys.Auth, subscription.Keys.P256dh).Scan(
 			&savedSubscription.FirstName,

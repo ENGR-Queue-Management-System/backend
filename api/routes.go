@@ -7,26 +7,29 @@ import (
 	"src/models"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/labstack/echo/v4"
 )
 
-func SaveSubscription(db *sql.DB) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		authHeader := c.Request().Header.Get("Authorization")
+func SaveSubscription(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		token, _, err := jwt.NewParser().ParseUnverified(tokenString, jwt.MapClaims{})
 		if err != nil {
-			return echo.NewHTTPError(http.StatusUnauthorized, "Invalid token")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			return
 		}
 		claims := token.Claims.(jwt.MapClaims)
 		firstName, ok := claims["firstName"].(string)
 		if !ok {
-			return echo.NewHTTPError(http.StatusBadRequest, "Invalid firstName in token")
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid firstName in token"})
+			return
 		}
 		lastName, ok := claims["lastName"].(string)
 		if !ok {
-			return echo.NewHTTPError(http.StatusBadRequest, "Invalid lastName in token")
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid lastName in token"})
+			return
 		}
 
 		subscription := new(struct {
@@ -37,7 +40,8 @@ func SaveSubscription(db *sql.DB) echo.HandlerFunc {
 			}
 		})
 		if err := c.Bind(&subscription); err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 
 		var savedSubscription models.Subscription
@@ -53,29 +57,30 @@ func SaveSubscription(db *sql.DB) echo.HandlerFunc {
 			&savedSubscription.P256dh,
 		)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "Error saving subscription: "+err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error saving subscription: " + err.Error()})
+			return
 		}
 
-		return c.JSON(http.StatusOK, helpers.FormatSuccessResponse(savedSubscription))
+		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(savedSubscription))
 	}
 }
 
-func RegisterRoutes(e *echo.Group, db *sql.DB) {
-	e.POST("/subscribe", SaveSubscription(db))
-	e.POST("/send-notification", SendNotificationTrigger(db))
+func RegisterRoutes(r *gin.RouterGroup, db *sql.DB) {
+	r.POST("/subscribe", SaveSubscription(db))
+	r.POST("/send-notification", SendNotificationTrigger(db))
 
-	e.POST("/authentication", Authentication(db))
-	e.POST("/reserve", ReserveNotLogin(db))
+	r.POST("/authentication", Authentication(db))
+	r.POST("/reserve", ReserveNotLogin(db))
 
-	e.GET("/user", GetUserInfo(db))
+	r.GET("/user", GetUserInfo(db))
 
-	e.GET("/counter", GetCounters(db))
-	e.POST("/counter", CreateCounter(db))
-	e.PUT("/counter/:id", UpdateCounter(db))
-	e.DELETE("/counter/:id", DeleteCounter(db))
+	r.GET("/counter", GetCounters(db))
+	r.POST("/counter", CreateCounter(db))
+	r.PUT("/counter/:id", UpdateCounter(db))
+	r.DELETE("/counter/:id", DeleteCounter(db))
 
-	e.GET("/topic", GetTopics(db))
-	e.POST("/topic", CreateTopic(db))
-	e.PUT("/topic/:id", UpdateTopic(db))
-	e.DELETE("/topic/:id", DeleteTopic(db))
+	r.GET("/topic", GetTopics(db))
+	r.POST("/topic", CreateTopic(db))
+	r.PUT("/topic/:id", UpdateTopic(db))
+	r.DELETE("/topic/:id", DeleteTopic(db))
 }

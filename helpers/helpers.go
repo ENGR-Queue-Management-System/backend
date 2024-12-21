@@ -1,40 +1,47 @@
 package helpers
 
 import (
-	"net/http"
+	"fmt"
+	"os"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/labstack/echo/v4"
 )
 
-func FormatSuccessResponse(data interface{}) map[string]interface{} {
-	return map[string]interface{}{
+func FormatSuccessResponse(data interface{}) gin.H {
+	return gin.H{
 		"message": "success",
 		"data":    data,
 	}
 }
 
-func ExtractEmailFromToken(c echo.Context) (string, error) {
-	authHeader := c.Request().Header.Get("Authorization")
+func ExtractEmailFromToken(c *gin.Context) (string, error) {
+	authHeader := c.GetHeader("Authorization")
 	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid authorization header")
+		return "", fmt.Errorf("Invalid authorization header")
 	}
 
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	token, _, err := jwt.NewParser().ParseUnverified(tokenString, jwt.MapClaims{})
-	if err != nil {
-		return "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid token")
+	secretKey := os.Getenv("JWT_SECRET_KEY")
+	if secretKey == "" {
+		return "", fmt.Errorf("JWT secret key is not set")
+	}
+	token, err := jwt.ParseWithClaims(tokenString, &jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(secretKey), nil
+	})
+	if err != nil || !token.Valid {
+		return "", fmt.Errorf("Invalid token")
 	}
 
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || claims["email"] == nil {
-		return "", echo.NewHTTPError(http.StatusUnauthorized, "Email not found in token")
-	}
-
-	email, ok := claims["email"].(string)
+	claims, ok := token.Claims.(*jwt.MapClaims)
 	if !ok {
-		return "", echo.NewHTTPError(http.StatusUnauthorized, "Invalid email in token")
+		return "", fmt.Errorf("Invalid claims in token")
+	}
+
+	email, ok := (*claims)["email"].(string)
+	if !ok {
+		return "", fmt.Errorf("Email not found in token")
 	}
 
 	return email, nil

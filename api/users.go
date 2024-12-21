@@ -6,14 +6,15 @@ import (
 	"src/helpers"
 	"src/models"
 
-	"github.com/labstack/echo/v4"
+	"github.com/gin-gonic/gin"
 )
 
-func GetUserInfo(dbConn *sql.DB) echo.HandlerFunc {
-	return func(c echo.Context) error {
+func GetUserInfo(dbConn *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		email, err := helpers.ExtractEmailFromToken(c)
 		if err != nil {
-			return err
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
 		}
 		query := `SELECT * FROM users u
 		LEFT JOIN counters c
@@ -28,10 +29,11 @@ func GetUserInfo(dbConn *sql.DB) echo.HandlerFunc {
 			&counter.ID, &counter.Counter, &counter.Status, &counter.TimeClosed,
 		)
 		if err == sql.ErrNoRows {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
 		}
 
 		user.Counter = counter
-		return c.JSON(http.StatusOK, helpers.FormatSuccessResponse(user))
+		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(user))
 	}
 }

@@ -7,9 +7,8 @@ import (
 	"src/api"
 	"src/db"
 
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	_ "github.com/lib/pq"
 )
 
@@ -30,17 +29,31 @@ func main() {
 	}
 	defer dbConn.Close()
 
-	e := echo.New()
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
-	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
-		AllowMethods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
-	}))
-	e.Use(middleware.BodyLimit("2M"))
+	router := gin.Default()
+	router.Use(gin.Logger())
+	router.Use(gin.Recovery())
+	router.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusOK)
+			return
+		}
+		c.Next()
+	})
+	router.Use(func(c *gin.Context) {
+		if c.Request.ContentLength > 2*1024*1024 { // 2 MB
+			c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{
+				"error": "Request body too large",
+			})
+			return
+		}
+		c.Next()
+	})
 
-	apiV1 := e.Group("/api/v1")
+	apiV1 := router.Group("/api/v1")
 	api.RegisterRoutes(apiV1, dbConn)
 
-	e.Logger.Fatal(e.Start(":" + port))
+	log.Fatal(router.Run(":" + port))
 }

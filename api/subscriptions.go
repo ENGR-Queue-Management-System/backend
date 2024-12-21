@@ -9,20 +9,20 @@ import (
 	"src/helpers"
 
 	"github.com/SherClockHolmes/webpush-go"
-	"github.com/labstack/echo/v4"
+	"github.com/gin-gonic/gin"
 )
 
 func SendPushNotification(db *sql.DB, message string) error {
 	rows, err := db.Query("SELECT student_id, endpoint, auth, p256dh FROM subscriptions")
 	if err != nil {
-		return err
+		return fmt.Errorf("error querying subscriptions: %v", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var endpoint, auth, p256dh string
 		if err := rows.Scan(&endpoint, &auth, &p256dh); err != nil {
-			return err
+			return fmt.Errorf("error scanning row: %v", err)
 		}
 
 		sub := &webpush.Subscription{
@@ -41,7 +41,7 @@ func SendPushNotification(db *sql.DB, message string) error {
 
 		if err != nil {
 			log.Println("Error sending push notification:", err)
-			return err
+			return fmt.Errorf("error sending push notification: %v", err)
 		}
 
 		fmt.Printf("Sent notification to %s\n", endpoint)
@@ -50,12 +50,13 @@ func SendPushNotification(db *sql.DB, message string) error {
 	return nil
 }
 
-func SendNotificationTrigger(db *sql.DB) echo.HandlerFunc {
-	return func(c echo.Context) error {
+func SendNotificationTrigger(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		message := `{"title": "Hello", "body": "This is a test notification"}`
 		if err := SendPushNotification(db, message); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 		}
-		return c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]string{"status": "notification sent"}))
+		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]string{"status": "notification sent"}))
 	}
 }

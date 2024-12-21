@@ -49,7 +49,7 @@ func CreateTables(db *sql.DB) {
 			firstName VARCHAR(100) NOT NULL,
 			lastName VARCHAR(100) NOT NULL,
 			topic_id INT REFERENCES topics(id) ON DELETE CASCADE ON UPDATE CASCADE,
-			note TEXT NOT NULL,
+			note TEXT,
 			status VARCHAR(10) DEFAULT 'WAITING' NOT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);`,

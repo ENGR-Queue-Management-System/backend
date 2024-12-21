@@ -1,1 +1,4 @@
-/.env
+.env
+
+.air.toml
+app.exe

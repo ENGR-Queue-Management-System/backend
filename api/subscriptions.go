@@ -27,7 +27,7 @@ func SendPushNotification(db *sql.DB, message string, userIdentifier map[string]
 		}
 
 		options := &webpush.Options{
-			Subscriber:      "mailto:nomon0210@gmail.com",
+			Subscriber:      "nomon0210@gmail.com",
 			VAPIDPublicKey:  os.Getenv("VAPID_PUBLIC_KEY"),
 			VAPIDPrivateKey: os.Getenv("VAPID_PRIVATE_KEY"),
 			TTL:             60,

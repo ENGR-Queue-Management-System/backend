@@ -69,6 +69,7 @@ func SaveSubscription(db *sql.DB) gin.HandlerFunc {
 func RegisterRoutes(r *gin.RouterGroup, db *sql.DB) {
 	r.POST("/subscribe", SaveSubscription(db))
 	r.POST("/send-notification", SendNotificationTrigger(db))
+	r.GET("/test-send-noti", GetSubscription(db))
 
 	r.POST("/authentication", Authentication(db))
 	r.POST("/reserve", ReserveNotLogin(db))

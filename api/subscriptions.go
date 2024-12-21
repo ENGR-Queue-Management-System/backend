@@ -12,8 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SendPushNotification(db *sql.DB, message string) error {
-	rows, err := db.Query("SELECT student_id, endpoint, auth, p256dh FROM subscriptions")
+func SendPushNotification(db *sql.DB, message string, userIdentifier map[string]string) error {
+	query := "SELECT endpoint, auth, p256dh FROM subscriptions WHERE firstname = $1 AND lastname = $2"
+	rows, err := db.Query(query, userIdentifier["firstName"], userIdentifier["lastName"])
 	if err != nil {
 		return fmt.Errorf("error querying subscriptions: %v", err)
 	}
@@ -52,11 +53,56 @@ func SendPushNotification(db *sql.DB, message string) error {
 
 func SendNotificationTrigger(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		message := `{"title": "Hello", "body": "This is a test notification"}`
-		if err := SendPushNotification(db, message); err != nil {
+		body := new(struct {
+			FirstName string `json:"firstName"`
+			LastName  string `json:"lastName"`
+			Message   string `json:"message"`
+		})
+		if err := c.Bind(body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			return
+		}
+
+		if err := SendPushNotification(db, body.Message, map[string]string{
+			"firstName": body.FirstName,
+			"lastName":  body.LastName,
+		}); err != nil {
+			log.Printf("Error sending notification: %v", err) // More detailed logging
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
 		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]string{"status": "notification sent"}))
+	}
+}
+
+func GetSubscription(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		query := "SELECT firstname, lastname FROM subscriptions"
+		rows, err := db.Query(query)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("error executing query: %v", err)})
+			return
+		}
+		defer rows.Close()
+
+		var subscriptions []map[string]string
+		for rows.Next() {
+			var firstName, lastName string
+			if err := rows.Scan(&firstName, &lastName); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("error scanning row: %v", err)})
+				return
+			}
+			subscription := map[string]string{
+				"firstName": firstName,
+				"lastName":  lastName,
+			}
+			subscriptions = append(subscriptions, subscription)
+		}
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("error iterating over rows: %v", err)})
+			return
+		}
+		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(subscriptions))
 	}
 }

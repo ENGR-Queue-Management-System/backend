@@ -77,11 +77,11 @@ func GetCounters(dbConn *sql.DB) gin.HandlerFunc {
 
 func CreateCounter(dbConn *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		requestBody := new(struct {
+		body := new(struct {
 			Email   string `json:"email"`
 			Counter string `json:"counter"`
 		})
-		if err := c.Bind(requestBody); err != nil {
+		if err := c.Bind(body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 			return
 		}
@@ -102,7 +102,7 @@ func CreateCounter(dbConn *sql.DB) gin.HandlerFunc {
 			`INSERT INTO counters (counter) VALUES ($1) 
 			ON CONFLICT (counter) DO UPDATE SET counter = EXCLUDED.counter
 			RETURNING id`,
-			requestBody.Counter,
+			body.Counter,
 		).Scan(&counterID)
 		if err != nil {
 			tx.Rollback()
@@ -112,7 +112,7 @@ func CreateCounter(dbConn *sql.DB) gin.HandlerFunc {
 		_, err = tx.Exec(
 			`INSERT INTO users (email, counter_id) VALUES ($1, $2)
 				ON CONFLICT (email) DO UPDATE SET counter_id = EXCLUDED.counter_id`,
-			requestBody.Email, counterID,
+			body.Email, counterID,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -139,27 +139,27 @@ func UpdateCounter(dbConn *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 			return
 		}
-		requestBody := new(struct {
+		body := new(struct {
 			Counter    *string `json:"counter"`
 			Status     *bool   `json:"status"`
 			TimeClosed *string `json:"timeClosed"`
 			Email      *string `json:"email"`
 		})
-		if err := c.Bind(&requestBody); err != nil {
+		if err := c.Bind(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 			return
 		}
 		updateFields := []string{}
 		updateValues := []interface{}{}
 		placeholderIndex := 2
-		if requestBody.Counter != nil {
+		if body.Counter != nil {
 			updateFields = append(updateFields, "counter = $"+strconv.Itoa(placeholderIndex))
-			updateValues = append(updateValues, *requestBody.Counter)
+			updateValues = append(updateValues, *body.Counter)
 			placeholderIndex++
 		}
-		if requestBody.Status != nil {
+		if body.Status != nil {
 			var statusValue int
-			if *requestBody.Status {
+			if *body.Status {
 				statusValue = 1
 			} else {
 				statusValue = 0
@@ -168,9 +168,9 @@ func UpdateCounter(dbConn *sql.DB) gin.HandlerFunc {
 			updateValues = append(updateValues, statusValue)
 			placeholderIndex++
 		}
-		if requestBody.TimeClosed != nil {
+		if body.TimeClosed != nil {
 			updateFields = append(updateFields, "time_closed = $"+strconv.Itoa(placeholderIndex))
-			updateValues = append(updateValues, *requestBody.TimeClosed)
+			updateValues = append(updateValues, *body.TimeClosed)
 			placeholderIndex++
 		}
 		if len(updateFields) == 0 {
@@ -187,17 +187,17 @@ func UpdateCounter(dbConn *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update counter"})
 			return
 		}
-		if requestBody.Email != nil {
+		if body.Email != nil {
 			var userID int64
 			selectQuery := "SELECT id FROM users WHERE email = $1"
-			err := dbConn.QueryRow(selectQuery, *requestBody.Email).Scan(&userID)
+			err := dbConn.QueryRow(selectQuery, *body.Email).Scan(&userID)
 			if err != nil && err != sql.ErrNoRows {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check user"})
 				return
 			}
 			if err == sql.ErrNoRows {
 				insertQuery := "INSERT INTO users (email, counter_id) VALUES ($1, $2)"
-				result, err := dbConn.Exec(insertQuery, *requestBody.Email, id)
+				result, err := dbConn.Exec(insertQuery, *body.Email, id)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 					return

@@ -297,15 +297,79 @@ func ReserveNotLogin(dbConn *sql.DB) gin.HandlerFunc {
 
 		insertQuery := `INSERT INTO queues (no, firstName, lastName, topic_id, note) 
 						VALUES ($1, $2, $3, $4, $5) RETURNING id`
-		_, err = dbConn.Exec(insertQuery, newQueueNo, body.FirstName, body.LastName, body.Topic, note)
+		var queueID int
+		err = dbConn.QueryRow(insertQuery, newQueueNo, body.FirstName, body.LastName, body.Topic, note).Scan(&queueID)
 		if err != nil {
 			log.Printf("Error inserting queue: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create queue"})
 			return
 		}
 
+		var lastInProgressQueueNo string
+		inProgressQuery := `
+			SELECT no 
+			FROM queues 
+			WHERE topic_id = $1 
+			AND status = 'IN_PROGRESS' 
+			ORDER BY created_at DESC 
+			LIMIT 1
+		`
+		err = dbConn.QueryRow(inProgressQuery, body.Topic).Scan(&lastInProgressQueueNo)
+		if err != nil && err != sql.ErrNoRows {
+			log.Printf("Error retrieving the last 'IN_PROGRESS' queue: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve the last 'IN_PROGRESS' queue"})
+			return
+		}
+
+		var countWaitingAfterInProgress int
+		var countWaitingQuery string
+		if lastInProgressQueueNo != "" {
+			countWaitingQuery = `
+				SELECT COUNT(*) 
+				FROM queues 
+				WHERE topic_id = $1 
+				AND status = 'WAITING' 
+				AND no > $2
+				AND id != $3
+				AND no LIKE $4
+			`
+			err = dbConn.QueryRow(countWaitingQuery, body.Topic, lastInProgressQueueNo, queueID, topicCode+"%").Scan(&countWaitingAfterInProgress)
+		} else {
+			countWaitingQuery = `
+				SELECT COUNT(*) 
+				FROM queues 
+				WHERE topic_id = $1 
+				AND status = 'WAITING'
+				AND id != $2
+				AND no LIKE $3
+			`
+			err = dbConn.QueryRow(countWaitingQuery, body.Topic, queueID, topicCode+"%").Scan(&countWaitingAfterInProgress)
+		}
+		if err != nil {
+			log.Printf("Error counting waiting queues after the 'IN_PROGRESS' queue: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count waiting queues after the 'IN_PROGRESS' queue"})
+			return
+		}
+
+		var queue models.Queue
+		queueQuery := `SELECT * FROM queues q LEFT JOIN topics t ON q.topic_id = t.id WHERE id = $1`
+		err = dbConn.QueryRow(queueQuery, queueID).Scan(&queue.ID, &queue.No, &queue.StudentID, &queue.Firstname, &queue.Lastname, &queue.TopicID,
+			&queue.Topic.ID, &queue.Topic.TopicTH, &queue.Topic.TopicEN, &queue.Topic.Code, &queue.Note, &queue.Status, &queue.CreatedAt)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve queue details"})
+			return
+		}
+
+		user := map[string]interface{}{
+			"firstname": body.FirstName,
+			"lastname":  body.LastName,
+		}
+
 		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{
-			"token": tokenString,
+			"token":   tokenString,
+			"user":    user,
+			"queue":   queue,
+			"waiting": countWaitingAfterInProgress,
 		}))
 	}
 }

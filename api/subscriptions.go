@@ -26,23 +26,22 @@ func SendPushNotification(db *sql.DB, message string, userIdentifier map[string]
 			return fmt.Errorf("error scanning row: %v", err)
 		}
 
-		sub := &webpush.Subscription{
+		options := &webpush.Options{
+			VAPIDPublicKey:  os.Getenv("VAPID_PUBLIC_KEY"),
+			VAPIDPrivateKey: os.Getenv("VAPID_PRIVATE_KEY"),
+			TTL:             60,
+		}
+		response, err := webpush.SendNotification([]byte(message), &webpush.Subscription{
 			Endpoint: endpoint,
 			Keys: webpush.Keys{
 				Auth:   auth,
 				P256dh: p256dh,
 			},
-		}
-
-		payload := []byte(message)
-		_, err := webpush.SendNotification(payload, sub, &webpush.Options{
-			VAPIDPublicKey:  os.Getenv("VAPID_PUBLIC_KEY"),
-			VAPIDPrivateKey: os.Getenv("VAPID_PRIVATE_KEY"),
-		})
-
+		}, options)
 		if err != nil {
-			log.Println("Error sending push notification:", err)
-			return fmt.Errorf("error sending push notification: %v", err)
+			log.Printf("Error sending notification to %s: %v", endpoint, err)
+		} else {
+			log.Printf("Successfully sent notification to %s. Response status: %s", endpoint, response.Status)
 		}
 
 		fmt.Printf("Sent notification to %s\n", endpoint)

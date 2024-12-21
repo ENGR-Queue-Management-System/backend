@@ -258,11 +258,11 @@ func ReserveNotLogin(dbConn *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var topicCode string
-		topicQuery := `SELECT code FROM topics WHERE id = $1`
-		err = dbConn.QueryRow(topicQuery, body.Topic).Scan(&topicCode)
+		var topic models.Topic
+		topicQuery := `SELECT * FROM topics WHERE id = $1`
+		err = dbConn.QueryRow(topicQuery, body.Topic).Scan(&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve topic code"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve topic"})
 			return
 		}
 
@@ -277,15 +277,15 @@ func ReserveNotLogin(dbConn *sql.DB) gin.HandlerFunc {
 		var newQueueNo string
 		if lastQueueNo != "" {
 			var numPart int
-			_, err := fmt.Sscanf(lastQueueNo, topicCode+"%03d", &numPart)
+			_, err := fmt.Sscanf(lastQueueNo, topic.Code+"%03d", &numPart)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse the last queue number"})
 				return
 			}
 			numPart++
-			newQueueNo = fmt.Sprintf("%s%03d", topicCode, numPart)
+			newQueueNo = fmt.Sprintf("%s%03d", topic.Code, numPart)
 		} else {
-			newQueueNo = fmt.Sprintf("%s001", topicCode)
+			newQueueNo = fmt.Sprintf("%s001", topic.Code)
 		}
 
 		var note interface{}
@@ -333,7 +333,7 @@ func ReserveNotLogin(dbConn *sql.DB) gin.HandlerFunc {
 				AND id != $3
 				AND no LIKE $4
 			`
-			err = dbConn.QueryRow(countWaitingQuery, body.Topic, lastInProgressQueueNo, queueID, topicCode+"%").Scan(&countWaitingAfterInProgress)
+			err = dbConn.QueryRow(countWaitingQuery, body.Topic, lastInProgressQueueNo, queueID, topic.Code+"%").Scan(&countWaitingAfterInProgress)
 		} else {
 			countWaitingQuery = `
 				SELECT COUNT(*) 
@@ -343,7 +343,7 @@ func ReserveNotLogin(dbConn *sql.DB) gin.HandlerFunc {
 				AND id != $2
 				AND no LIKE $3
 			`
-			err = dbConn.QueryRow(countWaitingQuery, body.Topic, queueID, topicCode+"%").Scan(&countWaitingAfterInProgress)
+			err = dbConn.QueryRow(countWaitingQuery, body.Topic, queueID, topic.Code+"%").Scan(&countWaitingAfterInProgress)
 		}
 		if err != nil {
 			log.Printf("Error counting waiting queues after the 'IN_PROGRESS' queue: %v", err)
@@ -352,22 +352,16 @@ func ReserveNotLogin(dbConn *sql.DB) gin.HandlerFunc {
 		}
 
 		var queue models.Queue
-		queueQuery := `SELECT * FROM queues q LEFT JOIN topics t ON q.topic_id = t.id WHERE id = $1`
-		err = dbConn.QueryRow(queueQuery, queueID).Scan(&queue.ID, &queue.No, &queue.StudentID, &queue.Firstname, &queue.Lastname, &queue.TopicID,
-			&queue.Topic.ID, &queue.Topic.TopicTH, &queue.Topic.TopicEN, &queue.Topic.Code, &queue.Note, &queue.Status, &queue.CreatedAt)
+		queueQuery := `SELECT * FROM queues q WHERE id = $1`
+		err = dbConn.QueryRow(queueQuery, queueID).Scan(&queue.ID, &queue.No, &queue.StudentID, &queue.Firstname, &queue.Lastname, &queue.TopicID, &queue.Note, &queue.Status, &queue.CreatedAt)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve queue details"})
 			return
 		}
-
-		user := map[string]interface{}{
-			"firstname": body.FirstName,
-			"lastname":  body.LastName,
-		}
+		queue.Topic = topic
 
 		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{
 			"token":   tokenString,
-			"user":    user,
 			"queue":   queue,
 			"waiting": countWaitingAfterInProgress,
 		}))

@@ -30,7 +30,8 @@ func SendPushNotification(db *sql.DB, message string, userIdentifier map[string]
 			Subscriber:      "nomon0210@gmail.com",
 			VAPIDPublicKey:  os.Getenv("VAPID_PUBLIC_KEY"),
 			VAPIDPrivateKey: os.Getenv("VAPID_PRIVATE_KEY"),
-			TTL:             60,
+			TTL:             180,
+			Urgency:         "high",
 		}
 		response, err := webpush.SendNotification([]byte(message), &webpush.Subscription{
 			Endpoint: endpoint,

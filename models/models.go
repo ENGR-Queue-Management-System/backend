@@ -73,6 +73,7 @@ type Queue struct {
 	Topic     Topic          `json:"topic"`
 	Note      *string        `json:"note"`
 	Status    helpers.STATUS `json:"status"`
+	CounterID *uint          `json:"counterId"`
 	CreatedAt time.Time      `json:"createdAt"`
 }
 

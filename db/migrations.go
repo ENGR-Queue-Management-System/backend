@@ -51,6 +51,7 @@ func CreateTables(db *sql.DB) {
 			topic_id INT REFERENCES topics(id) ON DELETE CASCADE ON UPDATE CASCADE,
 			note TEXT,
 			status VARCHAR(10) DEFAULT 'WAITING' NOT NULL,
+			counter_id INT,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);`,
 		`CREATE TABLE IF NOT EXISTS feedbacks (

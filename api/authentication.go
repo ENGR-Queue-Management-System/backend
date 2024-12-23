@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"src/helpers"
 	"src/models"
@@ -16,10 +17,10 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-type CMU_OAUTH_ROLE int
+type CMU_ENTRAID_ROLE int
 
 const (
-	MIS CMU_OAUTH_ROLE = iota
+	MIS CMU_ENTRAID_ROLE = iota
 	STUDENT
 	ALUMNI
 	RESIGN
@@ -31,7 +32,7 @@ const (
 	VIP
 )
 
-func (r CMU_OAUTH_ROLE) String() string {
+func (r CMU_ENTRAID_ROLE) String() string {
 	return [...]string{
 		"MISEmpAcc",
 		"StdAcc",
@@ -58,7 +59,7 @@ type AuthDTO struct {
 	RedirectURI string `json:"redirectUri" validate:"required"`
 }
 
-type CmuOAuthBasicInfoDTO struct {
+type CmuEntraIDBasicInfoDTO struct {
 	CmuitAccountName   string `json:"cmuitaccount_name"`
 	CmuitAccount       string `json:"cmuitaccount"`
 	StudentID          string `json:"student_id"`
@@ -77,20 +78,22 @@ type CmuOAuthBasicInfoDTO struct {
 	ItAccountTypeEN    string `json:"itaccounttype_EN"`
 }
 
-func getOAuthAccessToken(code, redirectUri string) (string, error) {
-	client := &http.Client{}
-	url := os.Getenv("CMU_OAUTH_GET_TOKEN_URL")
-	data := []byte(`grant_type=authorization_code&client_id=` + os.Getenv("CMU_OAUTH_CLIENT_ID") +
-		`&client_secret=` + os.Getenv("CMU_OAUTH_CLIENT_SECRET") +
-		`&code=` + code +
-		`&redirect_uri=` + redirectUri)
+func getEntraIDAccessToken(code, redirectUri string) (string, error) {
+	data := url.Values{}
+	data.Set("code", code)
+	data.Set("redirect_uri", redirectUri)
+	data.Set("client_id", os.Getenv("CMU_ENTRAID_CLIENT_ID"))
+	data.Set("client_secret", os.Getenv("CMU_ENTRAID_CLIENT_SECRET"))
+	data.Set("scope", os.Getenv("SCOPE"))
+	data.Set("grant_type", "authorization_code")
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	req, err := http.NewRequest("POST", os.Getenv("CMU_ENTRAID_GET_TOKEN_URL"), bytes.NewBufferString(data.Encode()))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
@@ -98,7 +101,9 @@ func getOAuthAccessToken(code, redirectUri string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", errors.New("failed to fetch access token")
+		bodyBytes := new(bytes.Buffer)
+		bodyBytes.ReadFrom(resp.Body)
+		return "", fmt.Errorf("failed to fetch access token, status: %d, body: %s", resp.StatusCode, bodyBytes.String())
 	}
 
 	var result map[string]interface{}
@@ -114,9 +119,9 @@ func getOAuthAccessToken(code, redirectUri string) (string, error) {
 	return token, nil
 }
 
-func getCMUBasicInfo(accessToken string) (*CmuOAuthBasicInfoDTO, error) {
+func getCMUBasicInfo(accessToken string) (*CmuEntraIDBasicInfoDTO, error) {
 	client := &http.Client{}
-	url := os.Getenv("CMU_OAUTH_GET_BASIC_INFO")
+	url := os.Getenv("CMU_ENTRAID_GET_BASIC_INFO")
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -133,7 +138,7 @@ func getCMUBasicInfo(accessToken string) (*CmuOAuthBasicInfoDTO, error) {
 		return nil, errors.New("failed to fetch CMU basic info")
 	}
 
-	var info CmuOAuthBasicInfoDTO
+	var info CmuEntraIDBasicInfoDTO
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return nil, err
 	}
@@ -145,7 +150,7 @@ func generateJWTToken(user interface{}, notAdmin bool) (string, error) {
 	var firstName, lastName string
 	claims := jwt.MapClaims{}
 	switch v := user.(type) {
-	case CmuOAuthBasicInfoDTO:
+	case CmuEntraIDBasicInfoDTO:
 		claims["email"] = v.CmuitAccount
 		firstName = v.FirstnameTH
 		lastName = v.LastnameTH
@@ -187,9 +192,9 @@ func Authentication(dbConn *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid authorization code or redirect URI"})
 			return
 		}
-		accessToken, err := getOAuthAccessToken(body.Code, body.RedirectURI)
+		accessToken, err := getEntraIDAccessToken(body.Code, body.RedirectURI)
 		if err != nil || accessToken == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot get OAuth access token"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot get EntraID access token"})
 			return
 		}
 		basicInfo, err := getCMUBasicInfo(accessToken)

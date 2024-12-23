@@ -27,10 +27,10 @@ func SendPushNotification(db *sql.DB, message string, userIdentifier map[string]
 		}
 
 		options := &webpush.Options{
-			Subscriber:      "nomon0210@gmail.com",
+			Subscriber:      "worapit2002@gmail.com",
 			VAPIDPublicKey:  os.Getenv("VAPID_PUBLIC_KEY"),
 			VAPIDPrivateKey: os.Getenv("VAPID_PRIVATE_KEY"),
-			TTL:             180,
+			TTL:             60,
 			Urgency:         "high",
 		}
 		response, err := webpush.SendNotification([]byte(message), &webpush.Subscription{
@@ -68,7 +68,7 @@ func SendNotificationTrigger(db *sql.DB) gin.HandlerFunc {
 			"firstName": body.FirstName,
 			"lastName":  body.LastName,
 		}); err != nil {
-			log.Printf("Error sending notification: %v", err) // More detailed logging
+			log.Printf("Error sending notification: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}

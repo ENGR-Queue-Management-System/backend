@@ -358,7 +358,7 @@ func ReserveNotLogin(dbConn *sql.DB) gin.HandlerFunc {
 
 		var queue models.Queue
 		queueQuery := `SELECT * FROM queues q WHERE id = $1`
-		err = dbConn.QueryRow(queueQuery, queueID).Scan(&queue.ID, &queue.No, &queue.StudentID, &queue.Firstname, &queue.Lastname, &queue.TopicID, &queue.Note, &queue.Status, &queue.CreatedAt)
+		err = dbConn.QueryRow(queueQuery, queueID).Scan(&queue.ID, &queue.No, &queue.StudentID, &queue.Firstname, &queue.Lastname, &queue.TopicID, &queue.Note, &queue.Status, &queue.CounterID, &queue.CreatedAt)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve queue details"})
 			return

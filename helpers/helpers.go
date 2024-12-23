@@ -2,7 +2,6 @@ package helpers
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -23,23 +22,14 @@ func ExtractEmailFromToken(c *gin.Context) (string, error) {
 	}
 
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	secretKey := os.Getenv("JWT_SECRET_KEY")
-	if secretKey == "" {
-		return "", fmt.Errorf("JWT secret key is not set")
-	}
 	token, _, err := jwt.NewParser().ParseUnverified(tokenString, jwt.MapClaims{})
-	if err != nil || !token.Valid {
+	if err != nil {
 		return "", fmt.Errorf("Invalid token")
 	}
-
-	claims, ok := token.Claims.(*jwt.MapClaims)
+	claims := token.Claims.(jwt.MapClaims)
+	email, ok := claims["email"].(string)
 	if !ok {
-		return "", fmt.Errorf("Invalid claims in token")
-	}
-
-	email, ok := (*claims)["email"].(string)
-	if !ok {
-		return "", fmt.Errorf("Email not found in token")
+		return "", fmt.Errorf("Invalid email in token")
 	}
 
 	return email, nil

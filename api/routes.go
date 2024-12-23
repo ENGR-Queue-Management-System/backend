@@ -83,6 +83,11 @@ func RegisterRoutes(r *gin.RouterGroup, db *sql.DB) {
 
 	r.GET("/topic", GetTopics(db))
 	r.POST("/topic", CreateTopic(db))
-	r.PUT("/topic/:id", UpdateTopic(db))
+	r.PUT("/topic", UpdateTopic(db))
 	r.DELETE("/topic/:id", DeleteTopic(db))
+
+	r.GET("/queue", GetQueues(db))
+	r.POST("/queue", CreateQueue(db))
+	r.PUT("/queue/:id", UpdateQueue(db))
+	r.DELETE("/queue/:id", DeleteQueue(db))
 }

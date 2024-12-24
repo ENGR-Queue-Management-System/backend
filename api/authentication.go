@@ -154,8 +154,10 @@ func generateJWTToken(user interface{}, notAdmin bool) (string, error) {
 		claims["email"] = v.CmuitAccount
 		firstName = v.FirstnameTH
 		lastName = v.LastnameTH
+		claims["role"] = helpers.ADMIN
 		if v.StudentID != "" && notAdmin {
 			claims["studentId"] = v.StudentID
+			claims["role"] = helpers.STUDENT
 		}
 		if firstName == "" {
 			firstName = helpers.Capitalize(v.FirstnameEN)
@@ -167,6 +169,7 @@ func generateJWTToken(user interface{}, notAdmin bool) (string, error) {
 	case LoginDTO:
 		firstName = v.FirstName
 		lastName = v.LastName
+		claims["role"] = helpers.STUDENT
 	}
 	claims["firstName"] = firstName
 	claims["lastName"] = lastName
@@ -310,49 +313,9 @@ func ReserveNotLogin(dbConn *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var lastInProgressQueueNo string
-		inProgressQuery := `
-			SELECT no 
-			FROM queues 
-			WHERE topic_id = $1 
-			AND status = 'IN_PROGRESS' 
-			ORDER BY created_at DESC 
-			LIMIT 1
-		`
-		err = dbConn.QueryRow(inProgressQuery, body.Topic).Scan(&lastInProgressQueueNo)
-		if err != nil && err != sql.ErrNoRows {
-			log.Printf("Error retrieving the last 'IN_PROGRESS' queue: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve the last 'IN_PROGRESS' queue"})
-			return
-		}
-
-		var countWaitingAfterInProgress int
-		var countWaitingQuery string
-		if lastInProgressQueueNo != "" {
-			countWaitingQuery = `
-				SELECT COUNT(*) 
-				FROM queues 
-				WHERE topic_id = $1 
-				AND status = 'WAITING' 
-				AND no > $2
-				AND id != $3
-				AND no LIKE $4
-			`
-			err = dbConn.QueryRow(countWaitingQuery, body.Topic, lastInProgressQueueNo, queueID, topic.Code+"%").Scan(&countWaitingAfterInProgress)
-		} else {
-			countWaitingQuery = `
-				SELECT COUNT(*) 
-				FROM queues 
-				WHERE topic_id = $1 
-				AND status = 'WAITING'
-				AND id != $2
-				AND no LIKE $3
-			`
-			err = dbConn.QueryRow(countWaitingQuery, body.Topic, queueID, topic.Code+"%").Scan(&countWaitingAfterInProgress)
-		}
+		countWaitingAfterInProgress, err := FindWaitingQueue(dbConn, body.Topic, queueID, topic.Code)
 		if err != nil {
-			log.Printf("Error counting waiting queues after the 'IN_PROGRESS' queue: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count waiting queues after the 'IN_PROGRESS' queue"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count waiting queues"})
 			return
 		}
 

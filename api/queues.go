@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"src/helpers"
 	"src/models"
@@ -109,6 +110,45 @@ func GetQueues(dbConn *sql.DB) gin.HandlerFunc {
 	}
 }
 
+func GetStudentQueue(dbConn *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		firstName := c.Query("firstName")
+		lastName := c.Query("lastName")
+		if firstName == "" || lastName == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing required parameters: firstName and lastName"})
+			return
+		}
+
+		var queue models.Queue
+		var topic models.Topic
+		queueQuery := `SELECT * FROM queues LEFT JOIN topics t ON topic_id = t.id WHERE firstname = $1 AND lastname = $2 AND status = $3`
+		err := dbConn.QueryRow(queueQuery, firstName, lastName, helpers.WAITING).Scan(
+			&queue.ID, &queue.No, &queue.StudentID, &queue.Firstname, &queue.Lastname,
+			&queue.TopicID, &queue.Note, &queue.Status, &queue.CounterID, &queue.CreatedAt,
+			&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code,
+		)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{"queue": map[string]interface{}{}}))
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve queue details"})
+			return
+		}
+		queue.Topic = topic
+
+		countWaitingAfterInProgress, err := FindWaitingQueue(dbConn, int(topic.ID), int(queue.ID), topic.Code)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count waiting queues"})
+			return
+		}
+
+		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{
+			"queue":   queue,
+			"waiting": countWaitingAfterInProgress}))
+	}
+}
+
 func CreateQueue(dbConn *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusCreated, map[string]string{
@@ -144,4 +184,51 @@ func DeleteQueue(dbConn *sql.DB) gin.HandlerFunc {
 		}
 		c.JSON(http.StatusOK, map[string]string{"message": "Queue deleted successfully"})
 	}
+}
+
+func FindWaitingQueue(dbConn *sql.DB, topicID int, queueID int, topicCode string) (int, error) {
+	var lastInProgressQueueNo string
+	inProgressQuery := `
+			SELECT no 
+			FROM queues 
+			WHERE topic_id = $1 
+			AND status = 'IN_PROGRESS' 
+			ORDER BY created_at DESC 
+			LIMIT 1
+		`
+	err := dbConn.QueryRow(inProgressQuery, topicID).Scan(&lastInProgressQueueNo)
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("Error retrieving the last 'IN_PROGRESS' queue: %v", err)
+		return -1, err
+	}
+
+	var countWaitingAfterInProgress int
+	var countWaitingQuery string
+	if lastInProgressQueueNo != "" {
+		countWaitingQuery = `
+				SELECT COUNT(*) 
+				FROM queues 
+				WHERE topic_id = $1 
+				AND status = 'WAITING' 
+				AND no > $2
+				AND id != $3
+				AND no LIKE $4
+			`
+		err = dbConn.QueryRow(countWaitingQuery, topicID, lastInProgressQueueNo, queueID, topicCode+"%").Scan(&countWaitingAfterInProgress)
+	} else {
+		countWaitingQuery = `
+				SELECT COUNT(*) 
+				FROM queues 
+				WHERE topic_id = $1 
+				AND status = 'WAITING'
+				AND id != $2
+				AND no LIKE $3
+			`
+		err = dbConn.QueryRow(countWaitingQuery, topicID, queueID, topicCode+"%").Scan(&countWaitingAfterInProgress)
+	}
+	if err != nil {
+		log.Printf("Error counting waiting queues after the 'IN_PROGRESS' queue: %v", err)
+		return -1, err
+	}
+	return countWaitingAfterInProgress, nil
 }

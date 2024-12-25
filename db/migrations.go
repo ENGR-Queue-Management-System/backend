@@ -8,6 +8,10 @@ import (
 
 func CreateTables(db *sql.DB) {
 	createTableQueries := []string{
+		`CREATE TABLE IF NOT EXISTS config (
+			id INT PRIMARY KEY DEFAULT 1,
+			login_not_cmu BOOLEAN DEFAULT true NOT NULL
+		);`,
 		`CREATE TABLE IF NOT EXISTS subscriptions (
 			firstname VARCHAR(100) NOT NULL,
 			lastname VARCHAR(100) NOT NULL,

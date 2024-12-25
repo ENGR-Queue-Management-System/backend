@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+type Config struct {
+	ID          uint `json:"id"`
+	LoginNotCmu bool `json:"loginNotCmu"`
+}
+
 type Subscription struct {
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`

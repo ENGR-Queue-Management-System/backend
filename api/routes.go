@@ -74,6 +74,9 @@ func RegisterRoutes(r *gin.RouterGroup, db *sql.DB) {
 	r.POST("/authentication", Authentication(db))
 	r.POST("/reserve", ReserveNotLogin(db))
 
+	r.GET("/config", GetConfig(db))
+	r.PUT("/config/login-not-cmu", SetLoginNotCmu(db))
+
 	r.GET("/user", GetUserInfo(db))
 
 	r.GET("/counter", GetCounters(db))

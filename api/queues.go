@@ -119,7 +119,7 @@ func GetStudentQueue(dbConn *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var queue models.Queue
+		var queue models.Queue = models.Queue{}
 		var topic models.Topic
 		queueQuery := `SELECT * FROM queues LEFT JOIN topics t ON topic_id = t.id WHERE firstname = $1 AND lastname = $2 AND status = $3`
 		err := dbConn.QueryRow(queueQuery, firstName, lastName, helpers.WAITING).Scan(
@@ -182,7 +182,7 @@ func DeleteQueue(dbConn *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Queue not found"})
 			return
 		}
-		c.JSON(http.StatusOK, map[string]string{"message": "Queue deleted successfully"})
+		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]string{"message": "Queue deleted successfully"}))
 	}
 }
 

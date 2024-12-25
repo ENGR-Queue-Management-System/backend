@@ -72,6 +72,6 @@ func DeleteTopic(dbConn *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Topic not found"})
 			return
 		}
-		c.JSON(http.StatusOK, map[string]string{"message": "Topic deleted successfully"})
+		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]string{"message": "Topic deleted successfully"}))
 	}
 }

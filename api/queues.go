@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"src/helpers"
@@ -11,6 +12,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type ReserveDTO struct {
+	Topic     int     `json:"topic" validate:"required"`
+	Note      *string `json:"note"`
+	FirstName *string `json:"firstName"`
+	LastName  *string `json:"lastName"`
+}
+
 func GetQueues(dbConn *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		query := c.Query("counter")
@@ -18,7 +26,7 @@ func GetQueues(dbConn *sql.DB) gin.HandlerFunc {
 			query := `SELECT * FROM queues LEFT JOIN topics t ON topic_id = t.id`
 			rows, err := dbConn.Query(query)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch queues"})
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch queues")
 				return
 			}
 			defer rows.Close()
@@ -32,7 +40,7 @@ func GetQueues(dbConn *sql.DB) gin.HandlerFunc {
 					&queue.TopicID, &queue.Note, &queue.Status, &queue.CounterID, &queue.CreatedAt,
 					&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code,
 				); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read queue data"})
+					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to read queue data")
 					return
 				}
 				queue.Topic = topic
@@ -40,14 +48,14 @@ func GetQueues(dbConn *sql.DB) gin.HandlerFunc {
 			}
 
 			if err := rows.Err(); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error iterating queues"})
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error iterating queues")
 				return
 			}
-			c.JSON(http.StatusOK, helpers.FormatSuccessResponse(queues))
+			helpers.FormatSuccessResponse(c, queues)
 		} else {
 			counterID, err := strconv.Atoi(query)
 			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Counter must be a valid integer"})
+				helpers.FormatErrorResponse(c, http.StatusBadRequest, "Counter must be a valid integer")
 				return
 			}
 			waitingQueuesQuery := `
@@ -64,7 +72,7 @@ func GetQueues(dbConn *sql.DB) gin.HandlerFunc {
 			`
 			waitingRows, err := dbConn.Query(waitingQueuesQuery, helpers.WAITING, counterID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch waiting queues"})
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch waiting queues")
 				return
 			}
 			defer waitingRows.Close()
@@ -78,7 +86,7 @@ func GetQueues(dbConn *sql.DB) gin.HandlerFunc {
 					&queue.TopicID, &queue.Note, &queue.Status, &queue.CounterID, &queue.CreatedAt,
 					&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code,
 				); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read waiting queue data"})
+					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to read waiting queue data")
 					return
 				}
 				queue.Topic = topic
@@ -96,16 +104,16 @@ func GetQueues(dbConn *sql.DB) gin.HandlerFunc {
 			if err == sql.ErrNoRows {
 				current = map[string]interface{}{}
 			} else if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch current queue"})
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch current queue")
 				return
 			} else {
 				current = currentQueue
 			}
 
-			c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{
+			helpers.FormatSuccessResponse(c, map[string]interface{}{
 				"queues":  waitingQueues,
 				"current": current,
-			}))
+			})
 		}
 	}
 }
@@ -115,7 +123,7 @@ func GetStudentQueue(dbConn *sql.DB) gin.HandlerFunc {
 		firstName := c.Query("firstName")
 		lastName := c.Query("lastName")
 		if firstName == "" || lastName == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing required parameters: firstName and lastName"})
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Missing required parameters: firstName and lastName")
 			return
 		}
 
@@ -129,37 +137,150 @@ func GetStudentQueue(dbConn *sql.DB) gin.HandlerFunc {
 		)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{"queue": map[string]interface{}{}}))
+				helpers.FormatSuccessResponse(c, map[string]interface{}{"queue": map[string]interface{}{}})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve queue details"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve queue details")
 			return
 		}
 		queue.Topic = topic
 
 		countWaitingAfterInProgress, err := FindWaitingQueue(dbConn, int(topic.ID), int(queue.ID), topic.Code)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count waiting queues"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to count waiting queues")
 			return
 		}
 
-		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{
+		helpers.FormatSuccessResponse(c, map[string]interface{}{
 			"queue":   queue,
-			"waiting": countWaitingAfterInProgress}))
+			"waiting": countWaitingAfterInProgress})
 	}
 }
 
 func CreateQueue(dbConn *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.JSON(http.StatusCreated, map[string]string{
-			"message": "not create api",
+		var body ReserveDTO
+		if err := c.Bind(&body); err != nil || body.Topic == 0 {
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid topic")
+			return
+		}
+
+		var topic models.Topic
+		topicQuery := `SELECT * FROM topics WHERE id = $1`
+		err := dbConn.QueryRow(topicQuery, body.Topic).Scan(&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code)
+		if err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve topic")
+			return
+		}
+		var lastQueueNo string
+		query := `SELECT no FROM queues WHERE topic_id = $1 ORDER BY created_at DESC LIMIT 1`
+		err = dbConn.QueryRow(query, body.Topic).Scan(&lastQueueNo)
+		if err != nil && err != sql.ErrNoRows {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve the last queue number")
+			return
+		}
+		var newQueueNo string
+		if lastQueueNo != "" {
+			var numPart int
+			_, err := fmt.Sscanf(lastQueueNo, topic.Code+"%03d", &numPart)
+			if err != nil {
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to parse the last queue number")
+				return
+			}
+			numPart++
+			newQueueNo = fmt.Sprintf("%s%03d", topic.Code, numPart)
+		} else {
+			newQueueNo = fmt.Sprintf("%s001", topic.Code)
+		}
+
+		var note interface{}
+		if body.Note == nil {
+			note = nil
+		} else {
+			note = *body.Note
+		}
+
+		var firstName string
+		var lastName string
+		var studentId *string
+		if body.FirstName != nil && body.LastName != nil {
+			firstName = *body.FirstName
+			lastName = *body.LastName
+		} else {
+			claims, err := helpers.ExtractToken(c)
+			if err != nil {
+				helpers.FormatErrorResponse(c, http.StatusUnauthorized, err.Error())
+				return
+			}
+			firstNameClaim, ok := (*claims)["firstName"].(string)
+			if !ok {
+				helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid firstName in token")
+				return
+			}
+			lastNameClaim, ok := (*claims)["lastName"].(string)
+			if !ok {
+				helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid lastName in token")
+				return
+			}
+			studentIdClaim := (*claims)["studentId"].(string)
+			if !ok {
+				helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid studentId in token")
+				return
+			}
+			studentId = &studentIdClaim
+			firstName = firstNameClaim
+			lastName = lastNameClaim
+		}
+
+		insertQuery := `INSERT INTO queues (no, student_id, firstName, lastName, topic_id, note)
+						VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
+		var queueID int
+		err = dbConn.QueryRow(insertQuery, newQueueNo, studentId, firstName, lastName, body.Topic, note).Scan(&queueID)
+		if err != nil {
+			log.Printf("Error inserting queue: %v", err)
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create queue")
+			return
+		}
+
+		countWaitingAfterInProgress, err := FindWaitingQueue(dbConn, body.Topic, queueID, topic.Code)
+		if err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to count waiting queues")
+			return
+		}
+
+		var queue models.Queue
+		queueQuery := `SELECT * FROM queues q WHERE id = $1`
+		err = dbConn.QueryRow(queueQuery, queueID).Scan(&queue.ID, &queue.No, &queue.StudentID, &queue.Firstname, &queue.Lastname, &queue.TopicID, &queue.Note, &queue.Status, &queue.CounterID, &queue.CreatedAt)
+		if err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve queue details")
+			return
+		}
+		queue.Topic = topic
+
+		if body.FirstName != nil && body.LastName != nil {
+			tokenString, err := generateJWTToken(body, true)
+			if err != nil {
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to generate JWT token")
+				return
+			}
+			helpers.FormatSuccessResponse(c, map[string]interface{}{
+				"token":   tokenString,
+				"queue":   queue,
+				"waiting": countWaitingAfterInProgress,
+			})
+			return
+		}
+
+		helpers.FormatSuccessResponse(c, map[string]interface{}{
+			"queue":   queue,
+			"waiting": countWaitingAfterInProgress,
 		})
 	}
 }
 
 func UpdateQueue(dbConn *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.JSON(http.StatusCreated, map[string]string{
+		helpers.FormatErrorResponse(c, http.StatusCreated, map[string]string{
 			"message": "not create api",
 		})
 	}
@@ -170,19 +291,19 @@ func DeleteQueue(dbConn *sql.DB) gin.HandlerFunc {
 		id := c.Param("id")
 		result, err := dbConn.Exec("DELETE FROM queues WHERE id = $1", id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete queue"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to delete queue")
 			return
 		}
 		rowsAffected, err := result.RowsAffected()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify deletion"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to verify deletion")
 			return
 		}
 		if rowsAffected == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Queue not found"})
+			helpers.FormatErrorResponse(c, http.StatusNotFound, "Queue not found")
 			return
 		}
-		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]string{"message": "Queue deleted successfully"}))
+		helpers.FormatSuccessResponse(c, map[string]string{"message": "Queue deleted successfully"})
 	}
 }
 

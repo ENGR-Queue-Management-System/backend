@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -45,13 +44,6 @@ func (r CMU_ENTRAID_ROLE) String() string {
 		"RetEmpAcc",
 		"VIPAcc",
 	}[r]
-}
-
-type LoginDTO struct {
-	Topic     int     `json:"topic" validate:"required"`
-	Note      *string `json:"note"`
-	FirstName string  `json:"firstName" validate:"required"`
-	LastName  string  `json:"lastName" validate:"required"`
 }
 
 type AuthDTO struct {
@@ -154,10 +146,13 @@ func generateJWTToken(user interface{}, notAdmin bool) (string, error) {
 		claims["email"] = v.CmuitAccount
 		firstName = v.FirstnameTH
 		lastName = v.LastnameTH
-		claims["role"] = helpers.ADMIN
-		if v.StudentID != "" && notAdmin {
+		if v.StudentID != "" {
 			claims["studentId"] = v.StudentID
+		}
+		if notAdmin {
 			claims["role"] = helpers.STUDENT
+		} else {
+			claims["role"] = helpers.ADMIN
 		}
 		if firstName == "" {
 			firstName = helpers.Capitalize(v.FirstnameEN)
@@ -166,9 +161,9 @@ func generateJWTToken(user interface{}, notAdmin bool) (string, error) {
 			lastName = helpers.Capitalize(v.LastnameEN)
 		}
 		claims["faculty"] = v.OrganizationNameTH
-	case LoginDTO:
-		firstName = v.FirstName
-		lastName = v.LastName
+	case ReserveDTO:
+		firstName = *v.FirstName
+		lastName = *v.LastName
 		claims["role"] = helpers.STUDENT
 	}
 	claims["firstName"] = firstName
@@ -192,17 +187,17 @@ func Authentication(dbConn *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body AuthDTO
 		if err := c.Bind(&body); err != nil || body.Code == "" || body.RedirectURI == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid authorization code or redirect URI"})
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid authorization code or redirect URI")
 			return
 		}
 		accessToken, err := getEntraIDAccessToken(body.Code, body.RedirectURI)
 		if err != nil || accessToken == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot get EntraID access token"})
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Cannot get EntraID access token")
 			return
 		}
 		basicInfo, err := getCMUBasicInfo(accessToken)
 		if err != nil || basicInfo == nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot get CMU basic info"})
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Cannot get CMU basic info")
 			return
 		}
 
@@ -213,23 +208,19 @@ func Authentication(dbConn *sql.DB) gin.HandlerFunc {
 			if basicInfo.ItAccountTypeID == STUDENT.String() {
 				tokenString, err := generateJWTToken(*basicInfo, true)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT token"})
+					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to generate JWT token")
 					return
 				}
-				c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{
-					"token": tokenString,
-				}))
+				helpers.FormatSuccessResponse(c, map[string]interface{}{"token": tokenString})
 				return
 			} else {
-				c.JSON(http.StatusForbidden, map[string]interface{}{
-					"message": "Cannot access",
-				})
+				helpers.FormatErrorResponse(c, http.StatusForbidden, "Cannot access")
 				return
 			}
 		}
 		tokenString, err := generateJWTToken(*basicInfo, false)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT token"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to generate JWT token")
 			return
 		}
 
@@ -237,7 +228,7 @@ func Authentication(dbConn *sql.DB) gin.HandlerFunc {
 			updateQuery := `UPDATE users SET firstname_th = $1, lastname_th = $2, firstname_en = $3, lastname_en = $4 WHERE email = $5`
 			_, err := dbConn.Exec(updateQuery, basicInfo.FirstnameTH, basicInfo.LastnameTH, basicInfo.FirstnameEN, basicInfo.LastnameEN, basicInfo.CmuitAccount)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user data"})
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update user data")
 				return
 			}
 			user.FirstNameTH = &basicInfo.FirstnameTH
@@ -246,92 +237,9 @@ func Authentication(dbConn *sql.DB) gin.HandlerFunc {
 			user.LastNameEN = &basicInfo.LastnameEN
 		}
 
-		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{
+		helpers.FormatSuccessResponse(c, map[string]interface{}{
 			"token": tokenString,
 			"user":  user,
-		}))
-	}
-}
-
-func ReserveNotLogin(dbConn *sql.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var body LoginDTO
-		if err := c.Bind(&body); err != nil || body.FirstName == "" || body.LastName == "" || body.Topic == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid firstname or lastname or topic"})
-			return
-		}
-		tokenString, err := generateJWTToken(body, true)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT token"})
-			return
-		}
-
-		var topic models.Topic
-		topicQuery := `SELECT * FROM topics WHERE id = $1`
-		err = dbConn.QueryRow(topicQuery, body.Topic).Scan(&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve topic"})
-			return
-		}
-
-		var lastQueueNo string
-		query := `SELECT no FROM queues WHERE topic_id = $1 ORDER BY created_at DESC LIMIT 1`
-		err = dbConn.QueryRow(query, body.Topic).Scan(&lastQueueNo)
-		if err != nil && err != sql.ErrNoRows {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve the last queue number"})
-			return
-		}
-
-		var newQueueNo string
-		if lastQueueNo != "" {
-			var numPart int
-			_, err := fmt.Sscanf(lastQueueNo, topic.Code+"%03d", &numPart)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse the last queue number"})
-				return
-			}
-			numPart++
-			newQueueNo = fmt.Sprintf("%s%03d", topic.Code, numPart)
-		} else {
-			newQueueNo = fmt.Sprintf("%s001", topic.Code)
-		}
-
-		var note interface{}
-		if body.Note == nil {
-			note = nil
-		} else {
-			note = *body.Note
-		}
-
-		insertQuery := `INSERT INTO queues (no, firstName, lastName, topic_id, note) 
-						VALUES ($1, $2, $3, $4, $5) RETURNING id`
-		var queueID int
-		err = dbConn.QueryRow(insertQuery, newQueueNo, body.FirstName, body.LastName, body.Topic, note).Scan(&queueID)
-		if err != nil {
-			log.Printf("Error inserting queue: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create queue"})
-			return
-		}
-
-		countWaitingAfterInProgress, err := FindWaitingQueue(dbConn, body.Topic, queueID, topic.Code)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count waiting queues"})
-			return
-		}
-
-		var queue models.Queue
-		queueQuery := `SELECT * FROM queues q WHERE id = $1`
-		err = dbConn.QueryRow(queueQuery, queueID).Scan(&queue.ID, &queue.No, &queue.StudentID, &queue.Firstname, &queue.Lastname, &queue.TopicID, &queue.Note, &queue.Status, &queue.CounterID, &queue.CreatedAt)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve queue details"})
-			return
-		}
-		queue.Topic = topic
-
-		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{
-			"token":   tokenString,
-			"queue":   queue,
-			"waiting": countWaitingAfterInProgress,
-		}))
+		})
 	}
 }

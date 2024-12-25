@@ -5,30 +5,25 @@ import (
 	"net/http"
 	"src/helpers"
 	"src/models"
-	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v4"
 )
 
 func SaveSubscription(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		token, _, err := jwt.NewParser().ParseUnverified(tokenString, jwt.MapClaims{})
+		claims, err := helpers.ExtractToken(c)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			helpers.FormatErrorResponse(c, http.StatusUnauthorized, err.Error())
 			return
 		}
-		claims := token.Claims.(jwt.MapClaims)
-		firstName, ok := claims["firstName"].(string)
+		firstName, ok := (*claims)["firstName"].(string)
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid firstName in token"})
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid firstName in token")
 			return
 		}
-		lastName, ok := claims["lastName"].(string)
+		lastName, ok := (*claims)["lastName"].(string)
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid lastName in token"})
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid lastName in token")
 			return
 		}
 
@@ -40,7 +35,7 @@ func SaveSubscription(db *sql.DB) gin.HandlerFunc {
 			} `json:"keys"`
 		}
 		if err := c.ShouldBindJSON(&subscription); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON payload: " + err.Error()})
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid JSON payload: "+err.Error())
 			return
 		}
 
@@ -58,11 +53,11 @@ func SaveSubscription(db *sql.DB) gin.HandlerFunc {
 			&savedSubscription.P256dh,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error saving subscription: " + err.Error()})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error saving subscription: "+err.Error())
 			return
 		}
 
-		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(savedSubscription))
+		helpers.FormatSuccessResponse(c, savedSubscription)
 	}
 }
 
@@ -72,7 +67,6 @@ func RegisterRoutes(r *gin.RouterGroup, db *sql.DB) {
 	r.GET("/test-send-noti", GetSubscription(db))
 
 	r.POST("/authentication", Authentication(db))
-	r.POST("/reserve", ReserveNotLogin(db))
 
 	r.GET("/config", GetConfig(db))
 	r.PUT("/config/login-not-cmu", SetLoginNotCmu(db))

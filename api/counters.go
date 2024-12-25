@@ -33,7 +33,7 @@ func GetCounters(dbConn *sql.DB) gin.HandlerFunc {
 		`
 		rows, err := dbConn.Query(query)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch counters"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch counters")
 			return
 		}
 		defer rows.Close()
@@ -49,7 +49,7 @@ func GetCounters(dbConn *sql.DB) gin.HandlerFunc {
 				&user.ID, &user.FirstNameTH, &user.LastNameTH, &user.FirstNameEN, &user.LastNameEN, &user.Email,
 				&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code,
 			); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read counter data"})
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to read counter data")
 				return
 			}
 			counter.TimeClosed = timeClosed.Format("15:04:05")
@@ -63,7 +63,7 @@ func GetCounters(dbConn *sql.DB) gin.HandlerFunc {
 		}
 
 		if err := rows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error iterating counters"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error iterating counters")
 			return
 		}
 
@@ -71,7 +71,7 @@ func GetCounters(dbConn *sql.DB) gin.HandlerFunc {
 		for _, counter := range countersMap {
 			counters = append(counters, *counter)
 		}
-		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(counters))
+		helpers.FormatSuccessResponse(c, counters)
 	}
 }
 
@@ -82,13 +82,13 @@ func CreateCounter(dbConn *sql.DB) gin.HandlerFunc {
 			Counter string `json:"counter"`
 		})
 		if err := c.Bind(body); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
 		tx, err := dbConn.Begin()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to start transaction")
 			return
 		}
 		defer func() {
@@ -106,7 +106,7 @@ func CreateCounter(dbConn *sql.DB) gin.HandlerFunc {
 		).Scan(&counterID)
 		if err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create or fetch counter"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create or fetch counter")
 			return
 		}
 		_, err = tx.Exec(
@@ -116,18 +116,18 @@ func CreateCounter(dbConn *sql.DB) gin.HandlerFunc {
 		)
 		if err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create user")
 			return
 		}
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to commit transaction")
 			return
 		}
 
-		c.JSON(http.StatusCreated, helpers.FormatSuccessResponse(map[string]string{
+		helpers.FormatSuccessResponse(c, map[string]string{
 			"message":   "Counter and user created successfully",
 			"counterId": fmt.Sprintf("%d", counterID),
-		}))
+		})
 	}
 }
 
@@ -136,7 +136,7 @@ func UpdateCounter(dbConn *sql.DB) gin.HandlerFunc {
 		idStr := c.Param("id")
 		id, err := strconv.Atoi(idStr)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid ID format")
 			return
 		}
 		body := new(struct {
@@ -146,7 +146,7 @@ func UpdateCounter(dbConn *sql.DB) gin.HandlerFunc {
 			Email      *string `json:"email"`
 		})
 		if err := c.Bind(&body); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 		updateFields := []string{}
@@ -174,7 +174,7 @@ func UpdateCounter(dbConn *sql.DB) gin.HandlerFunc {
 			placeholderIndex++
 		}
 		if len(updateFields) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "No fields to update"})
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "No fields to update")
 			return
 		}
 
@@ -184,7 +184,7 @@ func UpdateCounter(dbConn *sql.DB) gin.HandlerFunc {
 		if err != nil {
 			log.Printf("Error executing query: %v, Query: %s, Values: %v", err, query, updateValues)
 
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update counter"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update counter")
 			return
 		}
 		if body.Email != nil {
@@ -192,26 +192,26 @@ func UpdateCounter(dbConn *sql.DB) gin.HandlerFunc {
 			selectQuery := "SELECT id FROM users WHERE email = $1"
 			err := dbConn.QueryRow(selectQuery, *body.Email).Scan(&userID)
 			if err != nil && err != sql.ErrNoRows {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check user"})
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to check user")
 				return
 			}
 			if err == sql.ErrNoRows {
 				insertQuery := "INSERT INTO users (email, counter_id) VALUES ($1, $2)"
 				result, err := dbConn.Exec(insertQuery, *body.Email, id)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create user")
 					return
 				}
 				userID, err = result.LastInsertId()
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get new user ID"})
+					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to get new user ID")
 					return
 				}
 			} else {
 				updateUserQuery := "UPDATE users SET counter_id = $1 WHERE id = $2"
 				_, err = dbConn.Exec(updateUserQuery, id, userID)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user with counter_id"})
+					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update user with counter_id")
 					return
 				}
 			}
@@ -228,12 +228,12 @@ func UpdateCounter(dbConn *sql.DB) gin.HandlerFunc {
 			&updatedCounter.ID, &updatedCounter.Counter, &updatedCounter.Status, &timeClosed,
 			&user.ID, &user.FirstNameTH, &user.LastNameTH, &user.FirstNameEN, &user.LastNameEN, &user.Email,
 		); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch updated counter"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch updated counter")
 			return
 		}
 		updatedCounter.TimeClosed = timeClosed.Format("15:04:05")
 		updatedCounter.User = user
-		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(updatedCounter))
+		helpers.FormatSuccessResponse(c, updatedCounter)
 	}
 }
 
@@ -242,18 +242,18 @@ func DeleteCounter(dbConn *sql.DB) gin.HandlerFunc {
 		id := c.Param("id")
 		result, err := dbConn.Exec("DELETE FROM counters WHERE id = $1", id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete counter"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to delete counter")
 			return
 		}
 		rowsAffected, err := result.RowsAffected()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify deletion"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to verify deletion")
 			return
 		}
 		if rowsAffected == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Counter not found"})
+			helpers.FormatErrorResponse(c, http.StatusNotFound, "Counter not found")
 			return
 		}
-		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]string{"message": "Counter deleted successfully"}))
+		helpers.FormatSuccessResponse(c, map[string]string{"message": "Counter deleted successfully"})
 	}
 }

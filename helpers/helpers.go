@@ -2,37 +2,55 @@ package helpers
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
 )
 
-func FormatSuccessResponse(data interface{}) gin.H {
-	return gin.H{
+func FormatSuccessResponse(c *gin.Context, data interface{}) {
+	c.JSON(http.StatusOK, gin.H{
 		"message": "success",
 		"data":    data,
-	}
+	})
 }
 
-func ExtractEmailFromToken(c *gin.Context) (string, error) {
+func FormatErrorResponse(c *gin.Context, statusCode int, data interface{}) {
+	response := gin.H{
+		"statusCode": statusCode,
+		"status":     http.StatusText(statusCode),
+	}
+	if data != nil {
+		switch v := data.(type) {
+		case map[string]interface{}:
+			for key, value := range v {
+				response[key] = value
+			}
+		default:
+			response["message"] = data
+		}
+	}
+	c.JSON(statusCode, response)
+}
+
+func ExtractToken(c *gin.Context) (*jwt.MapClaims, error) {
 	authHeader := c.GetHeader("Authorization")
 	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return "", fmt.Errorf("Invalid authorization header")
+		return nil, fmt.Errorf("Invalid authorization header")
 	}
 
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	token, _, err := jwt.NewParser().ParseUnverified(tokenString, jwt.MapClaims{})
 	if err != nil {
-		return "", fmt.Errorf("Invalid token")
+		return nil, fmt.Errorf("Invalid token")
 	}
-	claims := token.Claims.(jwt.MapClaims)
-	email, ok := claims["email"].(string)
+	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return "", fmt.Errorf("Invalid email in token")
+		return nil, fmt.Errorf("Invalid claims in token")
 	}
 
-	return email, nil
+	return &claims, nil
 }
 
 func Capitalize(s string) string {

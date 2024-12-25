@@ -60,7 +60,7 @@ func SendNotificationTrigger(db *sql.DB) gin.HandlerFunc {
 			Message   string `json:"message"`
 		})
 		if err := c.Bind(body); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
@@ -69,11 +69,11 @@ func SendNotificationTrigger(db *sql.DB) gin.HandlerFunc {
 			"lastName":  body.LastName,
 		}); err != nil {
 			log.Printf("Error sending notification: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]string{"status": "notification sent"}))
+		helpers.FormatSuccessResponse(c, map[string]string{"status": "notification sent"})
 	}
 }
 
@@ -82,7 +82,7 @@ func GetSubscription(db *sql.DB) gin.HandlerFunc {
 		query := "SELECT firstname, lastname FROM subscriptions"
 		rows, err := db.Query(query)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("error executing query: %v", err)})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, fmt.Sprintf("error executing query: %v", err))
 			return
 		}
 		defer rows.Close()
@@ -91,7 +91,7 @@ func GetSubscription(db *sql.DB) gin.HandlerFunc {
 		for rows.Next() {
 			var firstName, lastName string
 			if err := rows.Scan(&firstName, &lastName); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("error scanning row: %v", err)})
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, fmt.Sprintf("error scanning row: %v", err))
 				return
 			}
 			subscription := map[string]string{
@@ -101,9 +101,9 @@ func GetSubscription(db *sql.DB) gin.HandlerFunc {
 			subscriptions = append(subscriptions, subscription)
 		}
 		if err := rows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("error iterating over rows: %v", err)})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, fmt.Sprintf("error iterating over rows: %v", err))
 			return
 		}
-		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(subscriptions))
+		helpers.FormatSuccessResponse(c, subscriptions)
 	}
 }

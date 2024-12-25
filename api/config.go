@@ -16,13 +16,13 @@ func GetConfig(dbConn *sql.DB) gin.HandlerFunc {
 		err := dbConn.QueryRow(query).Scan(&config.ID, &config.LoginNotCmu)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Config not found"})
+				helpers.FormatErrorResponse(c, http.StatusNotFound, "Config not found")
 			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve config"})
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve config")
 			}
 			return
 		}
-		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(config))
+		helpers.FormatSuccessResponse(c, config)
 	}
 }
 
@@ -39,10 +39,10 @@ func SetLoginNotCmu(dbConn *sql.DB) gin.HandlerFunc {
 		query := `UPDATE config SET login_not_cmu = $1`
 		_, err := dbConn.Exec(query, body.LoginNotCmu)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update config"})
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update config")
 			return
 		}
 
-		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(map[string]interface{}{"message": "Config updated successfully"}))
+		helpers.FormatSuccessResponse(c, map[string]interface{}{"message": "Config updated successfully"})
 	}
 }

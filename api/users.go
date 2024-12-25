@@ -11,9 +11,14 @@ import (
 
 func GetUserInfo(dbConn *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		email, err := helpers.ExtractEmailFromToken(c)
+		claims, err := helpers.ExtractToken(c)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			helpers.FormatErrorResponse(c, http.StatusUnauthorized, err.Error())
+			return
+		}
+		email, ok := (*claims)["email"].(string)
+		if !ok || email == "" {
+			helpers.FormatErrorResponse(c, http.StatusUnauthorized, "Email claim is missing or invalid in token")
 			return
 		}
 		query := `SELECT * FROM users u
@@ -29,11 +34,11 @@ func GetUserInfo(dbConn *sql.DB) gin.HandlerFunc {
 			&counter.ID, &counter.Counter, &counter.Status, &counter.TimeClosed,
 		)
 		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			helpers.FormatErrorResponse(c, http.StatusNotFound, "User not found")
 			return
 		}
 
 		user.Counter = counter
-		c.JSON(http.StatusOK, helpers.FormatSuccessResponse(user))
+		helpers.FormatSuccessResponse(c, user)
 	}
 }

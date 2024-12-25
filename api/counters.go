@@ -145,12 +145,12 @@ func UpdateCounter(dbConn *sql.DB) gin.HandlerFunc {
 			TimeClosed *string `json:"timeClosed"`
 			Email      *string `json:"email"`
 		})
-		if err := c.Bind(&body); err != nil {
+		if err := c.ShouldBindJSON(&body); err != nil {
 			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 		updateFields := []string{}
-		updateValues := []interface{}{}
+		updateValues := []interface{}{id}
 		placeholderIndex := 2
 		if body.Counter != nil {
 			updateFields = append(updateFields, "counter = $"+strconv.Itoa(placeholderIndex))
@@ -179,11 +179,9 @@ func UpdateCounter(dbConn *sql.DB) gin.HandlerFunc {
 		}
 
 		query := "UPDATE counters SET " + helpers.Join(updateFields, ", ") + " WHERE id = $1"
-		updateValues = append(updateValues, id)
 		_, err = dbConn.Exec(query, updateValues...)
 		if err != nil {
 			log.Printf("Error executing query: %v, Query: %s, Values: %v", err, query, updateValues)
-
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update counter")
 			return
 		}

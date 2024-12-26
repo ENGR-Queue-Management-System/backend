@@ -7,6 +7,8 @@ import (
 )
 
 func CreateTables(db *sql.DB) {
+	db.Exec("SET TIME ZONE 'Asia/Bangkok'")
+
 	createTableQueries := []string{
 		`CREATE TABLE IF NOT EXISTS config (
 			id INT PRIMARY KEY DEFAULT 1,
@@ -54,7 +56,7 @@ func CreateTables(db *sql.DB) {
 			lastName VARCHAR(100) NOT NULL,
 			topic_id INT REFERENCES topics(id) ON DELETE CASCADE ON UPDATE CASCADE,
 			note TEXT,
-			status VARCHAR(10) DEFAULT 'WAITING' NOT NULL,
+			status VARCHAR(20) DEFAULT 'WAITING' NOT NULL,
 			counter_id INT,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);`,

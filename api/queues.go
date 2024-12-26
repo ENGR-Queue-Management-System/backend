@@ -68,7 +68,7 @@ func GetQueues(dbConn *sql.DB) gin.HandlerFunc {
 							FROM counter_topics 
 							WHERE counter_id = $2
 					)
-				ORDER BY created_at ASC;
+				ORDER BY created_at ASC, no ASC;
 			`
 			waitingRows, err := dbConn.Query(waitingQueuesQuery, helpers.WAITING, counterID)
 			if err != nil {
@@ -93,7 +93,7 @@ func GetQueues(dbConn *sql.DB) gin.HandlerFunc {
 				waitingQueues = append(waitingQueues, queue)
 			}
 
-			currentQueueQuery := `SELECT * FROM queues WHERE status = $1 AND counter_id = $2;`
+			currentQueueQuery := `SELECT * FROM queues WHERE status = $1 AND counter_id = $2 LIMIT 1;`
 			var currentQueue models.Queue
 			err = dbConn.QueryRow(currentQueueQuery, helpers.IN_PROGRESS, counterID).Scan(
 				&currentQueue.ID, &currentQueue.No, &currentQueue.StudentID, &currentQueue.Firstname,
@@ -280,9 +280,50 @@ func CreateQueue(dbConn *sql.DB) gin.HandlerFunc {
 
 func UpdateQueue(dbConn *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		helpers.FormatErrorResponse(c, http.StatusCreated, map[string]string{
-			"message": "not create api",
+		id := c.Param("id")
+		body := new(struct {
+			Counter int `json:"counter"`
 		})
+		if err := c.ShouldBindJSON(body); err != nil {
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+		tx, err := dbConn.Begin()
+		if err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to start transaction")
+			return
+		}
+		updateCalledQuery := `UPDATE queues SET status = $1 WHERE status = $2 AND counter_id = $3;`
+		_, err = tx.Exec(updateCalledQuery, helpers.CALLED, helpers.IN_PROGRESS, body.Counter)
+		if err != nil {
+			tx.Rollback()
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update current queue to CALLED")
+			return
+		}
+		updateInProgressQuery := `UPDATE queues SET status = $1, counter_id = $2 WHERE id = $3;`
+		_, err = tx.Exec(updateInProgressQuery, helpers.IN_PROGRESS, body.Counter, id)
+		if err != nil {
+			tx.Rollback()
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update queue to IN_PROGRESS")
+			return
+		}
+		currentQueueQuery := `SELECT * FROM queues WHERE id = $1;`
+		var currentQueue models.Queue
+		err = tx.QueryRow(currentQueueQuery, id).Scan(
+			&currentQueue.ID, &currentQueue.No, &currentQueue.StudentID, &currentQueue.Firstname,
+			&currentQueue.Lastname, &currentQueue.TopicID, &currentQueue.Note,
+			&currentQueue.Status, &currentQueue.CounterID, &currentQueue.CreatedAt,
+		)
+		if err != nil {
+			tx.Rollback()
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch current queue")
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to commit transaction")
+			return
+		}
+		helpers.FormatSuccessResponse(c, currentQueue)
 	}
 }
 

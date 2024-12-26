@@ -6,6 +6,8 @@ import (
 	"os"
 	"src/api"
 	"src/db"
+	"src/helpers"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -28,6 +30,8 @@ func main() {
 		log.Fatalf("Failed to connect to the database: %v", err)
 	}
 	defer dbConn.Close()
+
+	helpers.StartCounterStatusUpdater(dbConn, time.Minute)
 
 	router := gin.Default()
 	router.Use(gin.Logger())

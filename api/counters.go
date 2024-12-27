@@ -30,7 +30,7 @@ func GetCounters(dbConn *sql.DB) gin.HandlerFunc {
 		LEFT JOIN 
 				topics t ON ct.topic_id = t.id
 		ORDER BY 
-				c.id ASC, t.id ASC;
+				c.counter ASC, t.id ASC;
 		`
 		rows, err := dbConn.Query(query)
 		if err != nil {
@@ -79,8 +79,10 @@ func GetCounters(dbConn *sql.DB) gin.HandlerFunc {
 func CreateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		body := new(struct {
-			Email   string `json:"email"`
-			Counter string `json:"counter"`
+			Counter    string `json:"counter"`
+			Email      string `json:"email"`
+			TimeClosed string `json:"timeClosed"`
+			Topics     []int  `json:"topics"`
 		})
 		if err := c.Bind(body); err != nil {
 			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid request body")
@@ -100,10 +102,10 @@ func CreateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 
 		var counterID int
 		err = tx.QueryRow(
-			`INSERT INTO counters (counter) VALUES ($1) 
+			`INSERT INTO counters (counter, time_closed) VALUES ($1, $2) 
 			ON CONFLICT (counter) DO UPDATE SET counter = EXCLUDED.counter
 			RETURNING id`,
-			body.Counter,
+			body.Counter, body.TimeClosed,
 		).Scan(&counterID)
 		if err != nil {
 			tx.Rollback()
@@ -117,18 +119,79 @@ func CreateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 		)
 		if err != nil {
 			tx.Rollback()
+			fmt.Println("Error while inserting user:", err)
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create user")
 			return
 		}
+		for _, topicID := range body.Topics {
+			_, err := tx.Exec(
+				`INSERT INTO counter_topics (counter_id, topic_id) 
+				 VALUES ($1, $2) 
+				 ON CONFLICT (counter_id, topic_id) 
+				 DO NOTHING`,
+				counterID, topicID,
+			)
+			if err != nil {
+				tx.Rollback()
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, fmt.Sprintf("Failed to associate topic %d with counter", topicID))
+				return
+			}
+		}
+
 		if err := tx.Commit(); err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to commit transaction")
 			return
 		}
 
-		helpers.FormatSuccessResponse(c, map[string]string{
-			"message":   "Counter and user created successfully",
-			"counterId": fmt.Sprintf("%d", counterID),
-		})
+		query := `
+		SELECT 
+			c.id, c.counter, c.status, c.time_closed,
+			u.id AS user_id, u.firstName_th, u.lastName_th, u.firstName_en, u.lastName_en, u.email,
+			t.id AS topic_id, t.topic_th, t.topic_en, t.code
+		FROM 
+			counters c
+		LEFT JOIN 
+			users u ON c.id = u.counter_id
+		LEFT JOIN 
+			counter_topics ct ON c.id = ct.counter_id
+		LEFT JOIN 
+			topics t ON ct.topic_id = t.id
+		WHERE 
+			c.id = $1;
+		`
+		rows, err := dbConn.Query(query, counterID)
+		if err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch counter data")
+			return
+		}
+		defer rows.Close()
+
+		var counter models.CounterWithUserWithTopics
+		var timeClosed time.Time
+		var user models.UserOnly
+		var topics []models.Topic
+		for rows.Next() {
+			var topic models.Topic
+			err := rows.Scan(
+				&counter.ID, &counter.Counter, &counter.Status, &timeClosed,
+				&user.ID, &user.FirstNameTH, &user.LastNameTH, &user.FirstNameEN, &user.LastNameEN, &user.Email,
+				&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code,
+			)
+			if err != nil {
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error processing row data")
+				return
+			}
+			topics = append(topics, topic)
+		}
+		if err := rows.Err(); err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error processing rows")
+			return
+		}
+		counter.TimeClosed = timeClosed.Format("15:04:05")
+		counter.User = user
+		counter.Topic = topics
+
+		helpers.FormatSuccessResponse(c, counter)
 	}
 }
 

@@ -45,7 +45,6 @@ func SetLoginNotCmu(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 		}
 
 		// server.BroadcastToNamespace(helpers.SOCKET, "setLoginNotCmu", body.LoginNotCmu)
-
 		helpers.FormatSuccessResponse(c, map[string]interface{}{"message": "Config updated successfully"})
 	}
 }

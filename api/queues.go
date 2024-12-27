@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	socketio "github.com/googollee/go-socket.io"
 )
 
 type ReserveDTO struct {
@@ -157,7 +158,7 @@ func GetStudentQueue(dbConn *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func CreateQueue(dbConn *sql.DB) gin.HandlerFunc {
+func CreateQueue(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body ReserveDTO
 		if err := c.Bind(&body); err != nil || body.Topic == 0 {
@@ -173,7 +174,7 @@ func CreateQueue(dbConn *sql.DB) gin.HandlerFunc {
 			return
 		}
 		var lastQueueNo string
-		query := `SELECT no FROM queues WHERE topic_id = $1 ORDER BY created_at DESC LIMIT 1`
+		query := `SELECT no FROM queues WHERE topic_id = $1 ORDER BY no DESC LIMIT 1`
 		err = dbConn.QueryRow(query, body.Topic).Scan(&lastQueueNo)
 		if err != nil && err != sql.ErrNoRows {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve the last queue number")
@@ -263,6 +264,8 @@ func CreateQueue(dbConn *sql.DB) gin.HandlerFunc {
 				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to generate JWT token")
 				return
 			}
+
+			// server.BroadcastToNamespace(helpers.SOCKET, "addQueue", queue)
 			helpers.FormatSuccessResponse(c, map[string]interface{}{
 				"token":   tokenString,
 				"queue":   queue,
@@ -271,6 +274,7 @@ func CreateQueue(dbConn *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// server.BroadcastToNamespace(helpers.SOCKET, "addQueue", queue)
 		helpers.FormatSuccessResponse(c, map[string]interface{}{
 			"queue":   queue,
 			"waiting": countWaitingAfterInProgress,
@@ -278,7 +282,7 @@ func CreateQueue(dbConn *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func UpdateQueue(dbConn *sql.DB) gin.HandlerFunc {
+func UpdateQueue(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		body := new(struct {
@@ -327,7 +331,7 @@ func UpdateQueue(dbConn *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func DeleteQueue(dbConn *sql.DB) gin.HandlerFunc {
+func DeleteQueue(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		result, err := dbConn.Exec("DELETE FROM queues WHERE id = $1", id)

@@ -2,7 +2,6 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 )
 
@@ -74,7 +73,7 @@ func CreateTables(db *sql.DB) {
 		if err != nil {
 			log.Fatalf("Failed to execute query: %s\nError: %v", query, err)
 		} else {
-			fmt.Println("Successfully executed query:", query)
+			log.Println("Successfully executed query:", query)
 		}
 	}
 }

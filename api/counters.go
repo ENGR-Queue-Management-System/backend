@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	socketio "github.com/googollee/go-socket.io"
 )
 
 func GetCounters(dbConn *sql.DB) gin.HandlerFunc {
@@ -29,7 +30,7 @@ func GetCounters(dbConn *sql.DB) gin.HandlerFunc {
 		LEFT JOIN 
 				topics t ON ct.topic_id = t.id
 		ORDER BY 
-				c.id, t.id;
+				c.id ASC, t.id ASC;
 		`
 		rows, err := dbConn.Query(query)
 		if err != nil {
@@ -75,7 +76,7 @@ func GetCounters(dbConn *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func CreateCounter(dbConn *sql.DB) gin.HandlerFunc {
+func CreateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		body := new(struct {
 			Email   string `json:"email"`
@@ -131,7 +132,7 @@ func CreateCounter(dbConn *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func UpdateCounter(dbConn *sql.DB) gin.HandlerFunc {
+func UpdateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr := c.Param("id")
 		id, err := strconv.Atoi(idStr)
@@ -235,7 +236,7 @@ func UpdateCounter(dbConn *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func DeleteCounter(dbConn *sql.DB) gin.HandlerFunc {
+func DeleteCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		result, err := dbConn.Exec("DELETE FROM counters WHERE id = $1", id)

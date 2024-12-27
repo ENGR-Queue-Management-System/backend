@@ -7,6 +7,7 @@ import (
 	"src/models"
 
 	"github.com/gin-gonic/gin"
+	socketio "github.com/googollee/go-socket.io"
 )
 
 func GetTopics(dbConn *sql.DB) gin.HandlerFunc {
@@ -39,7 +40,7 @@ func GetTopics(dbConn *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func CreateTopic(dbConn *sql.DB) gin.HandlerFunc {
+func CreateTopic(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		helpers.FormatSuccessResponse(c, map[string]string{
 			"message": "not create api",
@@ -47,7 +48,7 @@ func CreateTopic(dbConn *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func UpdateTopic(dbConn *sql.DB) gin.HandlerFunc {
+func UpdateTopic(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		helpers.FormatSuccessResponse(c, map[string]string{
 			"message": "not create api",
@@ -55,7 +56,7 @@ func UpdateTopic(dbConn *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func DeleteTopic(dbConn *sql.DB) gin.HandlerFunc {
+func DeleteTopic(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		result, err := dbConn.Exec("DELETE FROM topics WHERE id = $1", id)

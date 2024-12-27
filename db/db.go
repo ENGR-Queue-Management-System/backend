@@ -24,7 +24,7 @@ func ConnectDB() *sql.DB {
 		log.Fatalf("Error connecting to the database: %v", err)
 	}
 
-	fmt.Println("The database is connected")
+	println("The database is connected")
 	CreateTables(db)
 	return db
 }

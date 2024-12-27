@@ -7,6 +7,7 @@ import (
 	"src/models"
 
 	"github.com/gin-gonic/gin"
+	socketio "github.com/googollee/go-socket.io"
 )
 
 func GetConfig(dbConn *sql.DB) gin.HandlerFunc {
@@ -26,7 +27,7 @@ func GetConfig(dbConn *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func SetLoginNotCmu(dbConn *sql.DB) gin.HandlerFunc {
+func SetLoginNotCmu(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		body := new(struct {
 			LoginNotCmu bool `json:"loginNotCmu"`
@@ -42,6 +43,8 @@ func SetLoginNotCmu(dbConn *sql.DB) gin.HandlerFunc {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update config")
 			return
 		}
+
+		// server.BroadcastToNamespace(helpers.SOCKET, "setLoginNotCmu", body.LoginNotCmu)
 
 		helpers.FormatSuccessResponse(c, map[string]interface{}{"message": "Config updated successfully"})
 	}

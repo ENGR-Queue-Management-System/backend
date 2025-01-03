@@ -2,12 +2,15 @@ package api
 
 import (
 	"database/sql"
+	"fmt"
+	"log"
 	"net/http"
 	"src/helpers"
 	"src/models"
 
 	"github.com/gin-gonic/gin"
 	socketio "github.com/googollee/go-socket.io"
+	"github.com/lib/pq"
 )
 
 func GetTopics(dbConn *sql.DB) gin.HandlerFunc {
@@ -42,17 +45,94 @@ func GetTopics(dbConn *sql.DB) gin.HandlerFunc {
 
 func CreateTopic(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		helpers.FormatSuccessResponse(c, map[string]string{
-			"message": "not create api",
-		})
+		var body struct {
+			TopicTH string `json:"topicTH"`
+			TopicEN string `json:"topicEN"`
+			Code    string `json:"code"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
+		query := `INSERT INTO topics (topic_th, topic_en, code) VALUES ($1, $2, $3) RETURNING id`
+		var newTopicID int
+		err := dbConn.QueryRow(query, body.TopicTH, body.TopicEN, body.Code).Scan(&newTopicID)
+		if err != nil {
+			log.Printf("Error executing insert query: %v\nQuery: %s\nParams: %s, %s, %s", err, query, body.TopicTH, body.TopicEN, body.Code)
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create topic")
+			return
+		}
+
+		var newTopic models.Topic
+		err = dbConn.QueryRow(`SELECT id, topic_th, topic_en, code FROM topics WHERE id = $1`, newTopicID).Scan(
+			&newTopic.ID, &newTopic.TopicTH, &newTopic.TopicEN, &newTopic.Code)
+		if err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve new topic")
+			return
+		}
+
+		helpers.FormatSuccessResponse(c, newTopic)
 	}
 }
 
 func UpdateTopic(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		helpers.FormatSuccessResponse(c, map[string]string{
-			"message": "not create api",
-		})
+		id := c.Param("id")
+		var body struct {
+			TopicTH *string `json:"topicTH"`
+			TopicEN *string `json:"topicEN"`
+			Code    *string `json:"code"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
+		updateFields := []string{}
+		updateValues := []interface{}{id}
+		placeholderIndex := 2
+
+		if body.TopicTH != nil {
+			updateFields = append(updateFields, fmt.Sprintf("topic_th = $%d", placeholderIndex))
+			updateValues = append(updateValues, *body.TopicTH)
+			placeholderIndex++
+		}
+		if body.TopicEN != nil {
+			updateFields = append(updateFields, fmt.Sprintf("topic_en = $%d", placeholderIndex))
+			updateValues = append(updateValues, *body.TopicEN)
+			placeholderIndex++
+		}
+		if body.Code != nil {
+			updateFields = append(updateFields, fmt.Sprintf("code = $%d", placeholderIndex))
+			updateValues = append(updateValues, *body.Code)
+			placeholderIndex++
+		}
+		if len(updateFields) == 0 {
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "No fields to update")
+			return
+		}
+
+		query := "UPDATE topics SET " + helpers.Join(updateFields, ", ") + " WHERE id = $1"
+		_, err := dbConn.Exec(query, updateValues...)
+		if err != nil {
+			if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+				helpers.FormatErrorResponse(c, http.StatusBadRequest, fmt.Sprintf("The code '%v' already exists.", *body.Code))
+			} else {
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update topic")
+			}
+			return
+		}
+
+		var updatedTopic models.Topic
+		err = dbConn.QueryRow(`SELECT id, topic_th, topic_en, code FROM topics WHERE id = $1`, id).Scan(
+			&updatedTopic.ID, &updatedTopic.TopicTH, &updatedTopic.TopicEN, &updatedTopic.Code)
+		if err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve updated topic")
+			return
+		}
+
+		helpers.FormatSuccessResponse(c, updatedTopic)
 	}
 }
 

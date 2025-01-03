@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	socketio "github.com/googollee/go-socket.io"
+	"github.com/lib/pq"
 )
 
 func GetCounters(dbConn *sql.DB) gin.HandlerFunc {
@@ -269,8 +270,11 @@ func UpdateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 		if len(updateFields) > 0 {
 			query := "UPDATE counters SET " + helpers.Join(updateFields, ", ") + " WHERE id = $1"
 			if _, err := tx.Exec(query, updateValues...); err != nil {
-				_ = tx.Rollback()
-				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update counter")
+				if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+					helpers.FormatErrorResponse(c, http.StatusBadRequest, fmt.Sprintf("The counter '%v' already exists.", *body.Counter))
+				} else {
+					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update counter")
+				}
 				return
 			}
 		}

@@ -76,4 +76,34 @@ func CreateTables(db *sql.DB) {
 			log.Println("Successfully executed query:", query)
 		}
 	}
+
+	ResetSequences(db)
+}
+
+func ResetSequences(db *sql.DB) {
+	resetSequenceQuery := `
+		DO $$
+		DECLARE
+			seq_name text;
+			table_name text;
+		BEGIN
+			FOR table_name IN 
+				SELECT columns.table_name
+				FROM information_schema.columns AS columns
+				WHERE columns.column_default LIKE 'nextval%' AND columns.table_schema = 'public' 
+			LOOP
+				RAISE NOTICE 'Resetting sequence for table: %', table_name;
+				EXECUTE format(
+					'SELECT setval(pg_get_serial_sequence(''%I'', ''id''), COALESCE(MAX(id), 1), false) FROM %I',
+					table_name, table_name
+				);
+			END LOOP;
+		END $$;
+	`
+	_, err := db.Exec(resetSequenceQuery)
+	if err != nil {
+		log.Fatalf("Failed to reset sequences: %v", err)
+	} else {
+		log.Println("Successfully reset sequences for all tables.")
+	}
 }

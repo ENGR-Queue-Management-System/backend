@@ -1,16 +1,17 @@
 package api
 
 import (
-	"database/sql"
 	"net/http"
 	"src/helpers"
 	"src/models"
 
 	"github.com/gin-gonic/gin"
 	socketio "github.com/googollee/go-socket.io"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
-func SaveSubscription(db *sql.DB) gin.HandlerFunc {
+func SaveSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claims, err := helpers.ExtractToken(c)
 		if err != nil {
@@ -28,41 +29,41 @@ func SaveSubscription(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var subscription struct {
+		var subscriptionPayload struct {
 			Endpoint string `json:"endpoint"`
 			Keys     struct {
 				Auth   string `json:"auth"`
 				P256dh string `json:"p256dh"`
 			} `json:"keys"`
 		}
-		if err := c.ShouldBindJSON(&subscription); err != nil {
+		if err := c.ShouldBindJSON(&subscriptionPayload); err != nil {
 			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid JSON payload: "+err.Error())
 			return
 		}
 
-		var savedSubscription models.Subscription
-		query := `INSERT INTO subscriptions (firstname, lastname, endpoint, auth, p256dh)
-							VALUES ($1, $2, $3, $4, $5)
-							ON CONFLICT (firstname, lastname) DO UPDATE
-							SET endpoint = EXCLUDED.endpoint, auth = EXCLUDED.auth, p256dh = EXCLUDED.p256dh
-							RETURNING *`
-		err = db.QueryRow(query, firstName, lastName, subscription.Endpoint, subscription.Keys.Auth, subscription.Keys.P256dh).Scan(
-			&savedSubscription.FirstName,
-			&savedSubscription.LastName,
-			&savedSubscription.Endpoint,
-			&savedSubscription.Auth,
-			&savedSubscription.P256dh,
-		)
+		subscription := models.Subscription{
+			FirstName: firstName,
+			LastName:  lastName,
+			Endpoint:  subscriptionPayload.Endpoint,
+			Auth:      subscriptionPayload.Keys.Auth,
+			P256dh:    subscriptionPayload.Keys.P256dh,
+		}
+		err = db.Clauses(
+			clause.OnConflict{
+				Columns:   []clause.Column{{Name: "first_name"}, {Name: "last_name"}},
+				DoUpdates: clause.AssignmentColumns([]string{"endpoint", "auth", "p256dh"}),
+			},
+		).Create(&subscription).Error
 		if err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error saving subscription: "+err.Error())
 			return
 		}
 
-		helpers.FormatSuccessResponse(c, savedSubscription)
+		helpers.FormatSuccessResponse(c, subscription)
 	}
 }
 
-func RegisterRoutes(r *gin.RouterGroup, db *sql.DB, server *socketio.Server) {
+func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, server *socketio.Server) {
 	r.POST("/subscribe", SaveSubscription(db))
 	r.POST("/send-notification", SendNotificationTrigger(db))
 	r.GET("/test-send-noti", GetSubscription(db))

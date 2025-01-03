@@ -1,16 +1,14 @@
 package api
 
 import (
-	"database/sql"
 	"fmt"
-	"log"
 	"net/http"
 	"src/helpers"
 	"src/models"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	socketio "github.com/googollee/go-socket.io"
+	"gorm.io/gorm"
 )
 
 type ReserveDTO struct {
@@ -20,106 +18,48 @@ type ReserveDTO struct {
 	LastName  *string `json:"lastName"`
 }
 
-func GetQueues(dbConn *sql.DB) gin.HandlerFunc {
+func GetQueues(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		query := c.Query("counter")
-		if query == "" {
-			query := `SELECT * FROM queues LEFT JOIN topics t ON topic_id = t.id`
-			rows, err := dbConn.Query(query)
-			if err != nil {
+		counterID := c.Query("counter")
+
+		if counterID == "" {
+			var queues []models.Queue
+			if err := db.Preload("Topic").Find(&queues).Error; err != nil {
 				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch queues")
 				return
 			}
-			defer rows.Close()
-
-			var queues []models.Queue = []models.Queue{}
-			for rows.Next() {
-				var queue models.Queue
-				var topic models.Topic
-				if err := rows.Scan(
-					&queue.ID, &queue.No, &queue.StudentID, &queue.Firstname, &queue.Lastname,
-					&queue.TopicID, &queue.Note, &queue.Status, &queue.CounterID, &queue.CreatedAt,
-					&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code,
-				); err != nil {
-					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to read queue data")
-					return
-				}
-				queue.Topic = topic
-				queues = append(queues, queue)
-			}
-
-			if err := rows.Err(); err != nil {
-				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error iterating queues")
-				return
-			}
 			helpers.FormatSuccessResponse(c, queues)
-		} else {
-			counterID, err := strconv.Atoi(query)
-			if err != nil {
-				helpers.FormatErrorResponse(c, http.StatusBadRequest, "Counter must be a valid integer")
-				return
-			}
-			waitingQueuesQuery := `
-				SELECT * 
-				FROM queues
-				LEFT JOIN topics t ON topic_id = t.id
-				WHERE status = $1
-					AND topic_id IN (
-							SELECT topic_id 
-							FROM counter_topics 
-							WHERE counter_id = $2
-					)
-				ORDER BY created_at ASC, no ASC;
-			`
-			waitingRows, err := dbConn.Query(waitingQueuesQuery, helpers.WAITING, counterID)
-			if err != nil {
-				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch waiting queues")
-				return
-			}
-			defer waitingRows.Close()
+			return
+		}
 
-			var waitingQueues []models.Queue = []models.Queue{}
-			for waitingRows.Next() {
-				var queue models.Queue
-				var topic models.Topic
-				if err := waitingRows.Scan(
-					&queue.ID, &queue.No, &queue.StudentID, &queue.Firstname, &queue.Lastname,
-					&queue.TopicID, &queue.Note, &queue.Status, &queue.CounterID, &queue.CreatedAt,
-					&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code,
-				); err != nil {
-					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to read waiting queue data")
-					return
-				}
-				queue.Topic = topic
-				waitingQueues = append(waitingQueues, queue)
-			}
+		var waitingQueues []models.Queue
+		if err := db.Preload("Topic").
+			Where("status = ? AND topic_id IN (SELECT topic_id FROM counter_topics WHERE counter_id = ?)", helpers.WAITING, counterID).
+			Order("created_at ASC, no ASC").
+			Find(&waitingQueues).Error; err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch waiting queues")
+			return
+		}
 
-			currentQueueQuery := `SELECT * FROM queues WHERE status = $1 AND counter_id = $2 LIMIT 1;`
-			var currentQueue models.Queue
-			err = dbConn.QueryRow(currentQueueQuery, helpers.IN_PROGRESS, counterID).Scan(
-				&currentQueue.ID, &currentQueue.No, &currentQueue.StudentID, &currentQueue.Firstname,
-				&currentQueue.Lastname, &currentQueue.TopicID, &currentQueue.Note,
-				&currentQueue.Status, &currentQueue.CounterID, &currentQueue.CreatedAt,
-			)
-			var current interface{}
-			if err == sql.ErrNoRows {
-				current = map[string]interface{}{}
-			} else if err != nil {
+		var currentQueue models.Queue
+		if err := db.Where("status = ? AND counter_id = ?", helpers.IN_PROGRESS, counterID).First(&currentQueue).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				currentQueue = models.Queue{}
+			} else {
 				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch current queue")
 				return
-			} else {
-				current = currentQueue
 			}
-
-			helpers.FormatSuccessResponse(c, map[string]interface{}{
-				"queues":  waitingQueues,
-				"current": current,
-			})
 		}
+
+		helpers.FormatSuccessResponse(c, map[string]interface{}{
+			"queues":  waitingQueues,
+			"current": currentQueue,
+		})
+
 	}
 }
 
-func GetStudentQueue(dbConn *sql.DB) gin.HandlerFunc {
+func GetStudentQueue(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		firstName := c.Query("firstName")
 		lastName := c.Query("lastName")
@@ -128,25 +68,19 @@ func GetStudentQueue(dbConn *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var queue models.Queue = models.Queue{}
+		var queue models.Queue
 		var topic models.Topic
-		queueQuery := `SELECT * FROM queues LEFT JOIN topics t ON topic_id = t.id WHERE firstname = $1 AND lastname = $2 AND status = $3`
-		err := dbConn.QueryRow(queueQuery, firstName, lastName, helpers.WAITING).Scan(
-			&queue.ID, &queue.No, &queue.StudentID, &queue.Firstname, &queue.Lastname,
-			&queue.TopicID, &queue.Note, &queue.Status, &queue.CounterID, &queue.CreatedAt,
-			&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code,
-		)
+		err := db.Preload("Topic").Where("firstname = ? AND lastname = ? AND status = ?", firstName, lastName, helpers.WAITING).First(&queue).Error
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if err == gorm.ErrRecordNotFound {
 				helpers.FormatSuccessResponse(c, map[string]interface{}{"queue": map[string]interface{}{}})
 				return
 			}
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve queue details")
 			return
 		}
-		queue.Topic = topic
 
-		countWaitingAfterInProgress, err := FindWaitingQueue(dbConn, int(topic.ID), int(queue.ID), topic.Code)
+		countWaitingAfterInProgress, err := FindWaitingQueue(db, int(topic.ID), int(queue.ID), topic.Code)
 		if err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to count waiting queues")
 			return
@@ -158,7 +92,7 @@ func GetStudentQueue(dbConn *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func CreateQueue(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
+func CreateQueue(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body ReserveDTO
 		if err := c.Bind(&body); err != nil || body.Topic == 0 {
@@ -167,19 +101,19 @@ func CreateQueue(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 		}
 
 		var topic models.Topic
-		topicQuery := `SELECT * FROM topics WHERE id = $1`
-		err := dbConn.QueryRow(topicQuery, body.Topic).Scan(&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code)
+		err := db.First(&topic, body.Topic).Error
 		if err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve topic")
 			return
 		}
+
 		var lastQueueNo string
-		query := `SELECT no FROM queues WHERE topic_id = $1 ORDER BY no DESC LIMIT 1`
-		err = dbConn.QueryRow(query, body.Topic).Scan(&lastQueueNo)
-		if err != nil && err != sql.ErrNoRows {
+		err = db.Model(&models.Queue{}).Where("topic_id = ?", body.Topic).Order("no DESC").Limit(1).Pluck("no", &lastQueueNo).Error
+		if err != nil && err != gorm.ErrRecordNotFound {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve the last queue number")
 			return
 		}
+
 		var newQueueNo string
 		if lastQueueNo != "" {
 			var numPart int
@@ -194,16 +128,15 @@ func CreateQueue(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 			newQueueNo = fmt.Sprintf("%s001", topic.Code)
 		}
 
-		var note interface{}
+		var note *string
 		if body.Note == nil {
 			note = nil
 		} else {
-			note = *body.Note
+			note = body.Note
 		}
 
-		var firstName string
-		var lastName string
-		var studentId *string
+		var firstName, lastName string
+		var studentID *string
 		if body.FirstName != nil && body.LastName != nil {
 			firstName = *body.FirstName
 			lastName = *body.LastName
@@ -223,40 +156,41 @@ func CreateQueue(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 				helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid lastName in token")
 				return
 			}
-			studentIdClaim := (*claims)["studentId"].(string)
+			studentIDClaim, ok := (*claims)["studentId"].(string)
 			if !ok {
 				helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid studentId in token")
 				return
 			}
-			studentId = &studentIdClaim
+			studentID = &studentIDClaim
 			firstName = firstNameClaim
 			lastName = lastNameClaim
 		}
 
-		insertQuery := `INSERT INTO queues (no, student_id, firstName, lastName, topic_id, note)
-						VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
-		var queueID int
-		err = dbConn.QueryRow(insertQuery, newQueueNo, studentId, firstName, lastName, body.Topic, note).Scan(&queueID)
-		if err != nil {
-			log.Printf("Error inserting queue: %v", err)
+		queue := models.Queue{
+			No:        newQueueNo,
+			StudentID: studentID,
+			Firstname: firstName,
+			Lastname:  lastName,
+			TopicID:   body.Topic,
+			Note:      note,
+		}
+
+		if err := db.Create(&queue).Error; err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create queue")
 			return
 		}
 
-		countWaitingAfterInProgress, err := FindWaitingQueue(dbConn, body.Topic, queueID, topic.Code)
+		countWaitingAfterInProgress, err := FindWaitingQueue(db, body.Topic, queue.ID, topic.Code)
 		if err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to count waiting queues")
 			return
 		}
 
-		var queue models.Queue
-		queueQuery := `SELECT * FROM queues q WHERE id = $1`
-		err = dbConn.QueryRow(queueQuery, queueID).Scan(&queue.ID, &queue.No, &queue.StudentID, &queue.Firstname, &queue.Lastname, &queue.TopicID, &queue.Note, &queue.Status, &queue.CounterID, &queue.CreatedAt)
+		err = db.Model(&queue).Preload("Topic").First(&queue).Error
 		if err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve queue details")
 			return
 		}
-		queue.Topic = topic
 
 		if body.FirstName != nil && body.LastName != nil {
 			tokenString, err := generateJWTToken(body, true)
@@ -282,7 +216,7 @@ func CreateQueue(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 	}
 }
 
-func UpdateQueue(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
+func UpdateQueue(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		body := new(struct {
@@ -292,109 +226,52 @@ func UpdateQueue(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid request body")
 			return
 		}
-		tx, err := dbConn.Begin()
-		if err != nil {
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to start transaction")
-			return
-		}
-		updateCalledQuery := `UPDATE queues SET status = $1 WHERE status = $2 AND counter_id = $3;`
-		_, err = tx.Exec(updateCalledQuery, helpers.CALLED, helpers.IN_PROGRESS, body.Counter)
-		if err != nil {
+		tx := db.Begin()
+		if err := tx.Model(&models.Queue{}).Where("status = ? AND counter_id = ?", helpers.IN_PROGRESS, body.Counter).Update("status", helpers.CALLED).Error; err != nil {
 			tx.Rollback()
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update current queue to CALLED")
 			return
 		}
-		updateInProgressQuery := `UPDATE queues SET status = $1, counter_id = $2 WHERE id = $3;`
-		_, err = tx.Exec(updateInProgressQuery, helpers.IN_PROGRESS, body.Counter, id)
-		if err != nil {
+		if err := tx.Model(&models.Queue{}).Where("id = ?", id).Updates(map[string]interface{}{
+			"status":     helpers.IN_PROGRESS,
+			"counter_id": body.Counter,
+		}).Error; err != nil {
 			tx.Rollback()
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update queue to IN_PROGRESS")
 			return
 		}
-		currentQueueQuery := `SELECT * FROM queues WHERE id = $1;`
 		var currentQueue models.Queue
-		err = tx.QueryRow(currentQueueQuery, id).Scan(
-			&currentQueue.ID, &currentQueue.No, &currentQueue.StudentID, &currentQueue.Firstname,
-			&currentQueue.Lastname, &currentQueue.TopicID, &currentQueue.Note,
-			&currentQueue.Status, &currentQueue.CounterID, &currentQueue.CreatedAt,
-		)
-		if err != nil {
+		if err := tx.First(&currentQueue, id).Error; err != nil {
 			tx.Rollback()
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch current queue")
 			return
 		}
-		if err := tx.Commit(); err != nil {
+		if err := tx.Commit().Error; err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to commit transaction")
 			return
 		}
+
 		helpers.FormatSuccessResponse(c, currentQueue)
 	}
 }
 
-func DeleteQueue(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
+func DeleteQueue(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		result, err := dbConn.Exec("DELETE FROM queues WHERE id = $1", id)
-		if err != nil {
+		if err := db.Delete(&models.Queue{}, id).Error; err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to delete queue")
-			return
-		}
-		rowsAffected, err := result.RowsAffected()
-		if err != nil {
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to verify deletion")
-			return
-		}
-		if rowsAffected == 0 {
-			helpers.FormatErrorResponse(c, http.StatusNotFound, "Queue not found")
 			return
 		}
 		helpers.FormatSuccessResponse(c, map[string]string{"message": "Queue deleted successfully"})
 	}
 }
 
-func FindWaitingQueue(dbConn *sql.DB, topicID int, queueID int, topicCode string) (int, error) {
-	var lastInProgressQueueNo string
-	inProgressQuery := `
-			SELECT no 
-			FROM queues 
-			WHERE topic_id = $1 
-			AND status = 'IN_PROGRESS' 
-			ORDER BY created_at DESC 
-			LIMIT 1
-		`
-	err := dbConn.QueryRow(inProgressQuery, topicID).Scan(&lastInProgressQueueNo)
-	if err != nil && err != sql.ErrNoRows {
-		log.Printf("Error retrieving the last 'IN_PROGRESS' queue: %v", err)
-		return -1, err
+func FindWaitingQueue(db *gorm.DB, topicID int, queueID int, topicCode string) (int, error) {
+	var count int64
+	if err := db.Model(&models.Queue{}).
+		Where("topic_id = ? AND status = ? AND id != ? AND no LIKE ?", topicID, helpers.WAITING, queueID, topicCode+"%").
+		Count(&count).Error; err != nil {
+		return 0, err
 	}
-
-	var countWaitingAfterInProgress int
-	var countWaitingQuery string
-	if lastInProgressQueueNo != "" {
-		countWaitingQuery = `
-				SELECT COUNT(*) 
-				FROM queues 
-				WHERE topic_id = $1 
-				AND status = 'WAITING' 
-				AND no > $2
-				AND id != $3
-				AND no LIKE $4
-			`
-		err = dbConn.QueryRow(countWaitingQuery, topicID, lastInProgressQueueNo, queueID, topicCode+"%").Scan(&countWaitingAfterInProgress)
-	} else {
-		countWaitingQuery = `
-				SELECT COUNT(*) 
-				FROM queues 
-				WHERE topic_id = $1 
-				AND status = 'WAITING'
-				AND id != $2
-				AND no LIKE $3
-			`
-		err = dbConn.QueryRow(countWaitingQuery, topicID, queueID, topicCode+"%").Scan(&countWaitingAfterInProgress)
-	}
-	if err != nil {
-		log.Printf("Error counting waiting queues after the 'IN_PROGRESS' queue: %v", err)
-		return -1, err
-	}
-	return countWaitingAfterInProgress, nil
+	return int(count), nil
 }

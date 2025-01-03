@@ -12,7 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 	socketio "github.com/googollee/go-socket.io"
 	"github.com/joho/godotenv"
-	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -26,13 +25,13 @@ func main() {
 		log.Fatal("PORT environment variable is not set")
 	}
 
-	dbConn := db.ConnectDB()
-	if err != nil {
-		log.Fatalf("Failed to connect to the database: %v", err)
-	}
-	defer dbConn.Close()
+	dbConn := db.ConnectDB().Debug()
+	defer func() {
+		sqlDB, _ := dbConn.DB()
+		sqlDB.Close()
+	}()
 
-	helpers.StartCounterStatusUpdater(dbConn, time.Minute)
+	db.StartCounterStatusUpdater(dbConn, time.Minute)
 
 	router := gin.Default()
 	router.Use(func(c *gin.Context) {

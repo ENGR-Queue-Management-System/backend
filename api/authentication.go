@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
+	"gorm.io/gorm"
 )
 
 type CMU_ENTRAID_ROLE int
@@ -183,7 +183,7 @@ func generateJWTToken(user interface{}, notAdmin bool) (string, error) {
 	return tokenString, nil
 }
 
-func Authentication(dbConn *sql.DB) gin.HandlerFunc {
+func Authentication(dbConn *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body AuthDTO
 		if err := c.Bind(&body); err != nil || body.Code == "" || body.RedirectURI == "" {
@@ -201,10 +201,9 @@ func Authentication(dbConn *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		row := dbConn.QueryRow("SELECT * FROM users WHERE email = $1", basicInfo.CmuitAccount)
 		var user models.User
-		err = row.Scan(&user.ID, &user.FirstNameTH, &user.LastNameTH, &user.FirstNameEN, &user.LastNameEN, &user.Email, &user.CounterID)
-		if err == sql.ErrNoRows {
+		result := dbConn.Where("email = ?", basicInfo.CmuitAccount).First(&user)
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			if basicInfo.ItAccountTypeID == STUDENT.String() {
 				tokenString, err := generateJWTToken(*basicInfo, true)
 				if err != nil {
@@ -218,6 +217,7 @@ func Authentication(dbConn *sql.DB) gin.HandlerFunc {
 				return
 			}
 		}
+
 		tokenString, err := generateJWTToken(*basicInfo, false)
 		if err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to generate JWT token")
@@ -225,16 +225,14 @@ func Authentication(dbConn *sql.DB) gin.HandlerFunc {
 		}
 
 		if user.FirstNameEN == nil || user.LastNameEN == nil {
-			updateQuery := `UPDATE users SET firstname_th = $1, lastname_th = $2, firstname_en = $3, lastname_en = $4 WHERE email = $5`
-			_, err := dbConn.Exec(updateQuery, basicInfo.FirstnameTH, basicInfo.LastnameTH, basicInfo.FirstnameEN, basicInfo.LastnameEN, basicInfo.CmuitAccount)
-			if err != nil {
-				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update user data")
-				return
-			}
 			user.FirstNameTH = &basicInfo.FirstnameTH
 			user.LastNameTH = &basicInfo.LastnameTH
 			user.FirstNameEN = &basicInfo.FirstnameEN
 			user.LastNameEN = &basicInfo.LastnameEN
+			if err := dbConn.Save(&user).Error; err != nil {
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update user data")
+				return
+			}
 		}
 
 		helpers.FormatSuccessResponse(c, map[string]interface{}{

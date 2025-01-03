@@ -1,82 +1,52 @@
 package api
 
 import (
-	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"src/helpers"
 	"src/models"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	socketio "github.com/googollee/go-socket.io"
-	"github.com/lib/pq"
+	"gorm.io/gorm"
 )
 
-func GetCounters(dbConn *sql.DB) gin.HandlerFunc {
+func GetCounters(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		query := `
-		SELECT 
-				c.id, c.counter, c.status, c.time_closed,
-				u.id AS user_id, u.firstName_TH, u.lastName_TH, u.firstName_EN, u.lastName_EN, u.email,
-				t.id AS topic_id, t.topic_th, t.topic_en, t.code
-		FROM 
-				counters c
-		LEFT JOIN 
-				users u ON c.id = u.counter_id
-		LEFT JOIN 
-				counter_topics ct ON c.id = ct.counter_id
-		LEFT JOIN 
-				topics t ON ct.topic_id = t.id
-		ORDER BY 
-				c.counter ASC, t.id ASC;
-		`
-		rows, err := dbConn.Query(query)
+		var counters []models.Counter
+		err := db.Preload("User", func(db *gorm.DB) *gorm.DB {
+			return db.Select("ID", "CounterID", "FirstNameTH", "FirstNameEN", "LastNameTH", "LastNameEN", "Email")
+		}).Preload("Topics", func(db *gorm.DB) *gorm.DB { return db.Order("id ASC") }).Order("counter ASC").Find(&counters).Error
 		if err != nil {
+			log.Println("Error fetching counters:", err)
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch counters")
 			return
 		}
-		defer rows.Close()
-
-		countersMap := make(map[int]*models.CounterWithUserWithTopics)
-		for rows.Next() {
-			var counter models.CounterWithUserWithTopics
-			var timeClosed time.Time
-			var user models.UserOnly
-			var topic models.Topic
-			if err := rows.Scan(
-				&counter.ID, &counter.Counter, &counter.Status, &timeClosed,
-				&user.ID, &user.FirstNameTH, &user.LastNameTH, &user.FirstNameEN, &user.LastNameEN, &user.Email,
-				&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code,
-			); err != nil {
-				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to read counter data")
-				return
-			}
-			counter.TimeClosed = timeClosed.Format("15:04:05")
-			counter.User = user
-			if existingCounter, exists := countersMap[counter.ID]; exists {
-				existingCounter.Topic = append(existingCounter.Topic, topic)
-			} else {
-				counter.Topic = []models.Topic{topic}
-				countersMap[counter.ID] = &counter
-			}
+		var response []models.CounterResponse
+		for _, counter := range counters {
+			response = append(response, models.CounterResponse{
+				ID:         counter.ID,
+				Counter:    counter.Counter,
+				Status:     counter.Status,
+				TimeClosed: counter.TimeClosed,
+				User: models.UserWithoutCounter{
+					ID:          counter.User.ID,
+					FirstNameTH: counter.User.FirstNameTH,
+					LastNameTH:  counter.User.LastNameTH,
+					FirstNameEN: counter.User.FirstNameEN,
+					LastNameEN:  counter.User.LastNameEN,
+					Email:       counter.User.Email,
+				},
+				Topics: counter.Topics,
+			})
 		}
-
-		if err := rows.Err(); err != nil {
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error iterating counters")
-			return
-		}
-
-		var counters []models.CounterWithUserWithTopics
-		for _, counter := range countersMap {
-			counters = append(counters, *counter)
-		}
-		helpers.FormatSuccessResponse(c, counters)
+		helpers.FormatSuccessResponse(c, response)
 	}
 }
 
-func CreateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
+func CreateCounter(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		body := new(struct {
 			Counter    string `json:"counter"`
@@ -89,8 +59,8 @@ func CreateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 			return
 		}
 
-		tx, err := dbConn.Begin()
-		if err != nil {
+		tx := db.Begin()
+		if tx.Error != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to start transaction")
 			return
 		}
@@ -100,37 +70,60 @@ func CreateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 			}
 		}()
 
-		var counterID int
-		err = tx.QueryRow(
-			`INSERT INTO counters (counter, time_closed) VALUES ($1, $2) 
-			ON CONFLICT (counter) DO UPDATE SET counter = EXCLUDED.counter
-			RETURNING id`,
-			body.Counter, body.TimeClosed,
-		).Scan(&counterID)
-		if err != nil {
+		var counter models.Counter
+		err := tx.Where("counter = ?", body.Counter).First(&counter).Error
+		if err != nil && err != gorm.ErrRecordNotFound {
 			tx.Rollback()
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create or fetch counter")
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Counter already exists")
 			return
 		}
-		_, err = tx.Exec(
-			`INSERT INTO users (email, counter_id) VALUES ($1, $2)
-				ON CONFLICT (email) DO UPDATE SET counter_id = EXCLUDED.counter_id`,
-			body.Email, counterID,
-		)
+		if err != gorm.ErrRecordNotFound {
+			tx.Rollback()
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch counter")
+			return
+		}
+		counter = models.Counter{
+			Counter:    body.Counter,
+			TimeClosed: body.TimeClosed,
+		}
+		err = tx.Create(&counter).Error
 		if err != nil {
 			tx.Rollback()
-			fmt.Println("Error while inserting user:", err)
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create counter")
+			return
+		}
+
+		var user models.User
+		err = tx.Where("email = ?", body.Email).First(&user).Error
+		if err != nil && err != gorm.ErrRecordNotFound {
+			tx.Rollback()
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create user")
 			return
 		}
+		if err == gorm.ErrRecordNotFound {
+			user = models.User{
+				Email:     body.Email,
+				CounterID: counter.ID,
+			}
+			err = tx.Create(&user).Error
+			if err != nil {
+				tx.Rollback()
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create user")
+				return
+			}
+		} else {
+			user.CounterID = counter.ID
+			err = tx.Save(&user).Error
+			if err != nil {
+				tx.Rollback()
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update user")
+				return
+			}
+		}
+
 		for _, topicID := range body.Topics {
-			_, err := tx.Exec(
-				`INSERT INTO counter_topics (counter_id, topic_id) 
-				 VALUES ($1, $2) 
-				 ON CONFLICT (counter_id, topic_id) 
-				 DO NOTHING`,
-				counterID, topicID,
-			)
+			var counterTopic models.CounterTopic
+			err := tx.Where("counter_id = ? AND topic_id = ?", counter.ID, topicID).FirstOrCreate(&counterTopic, models.CounterTopic{CounterID: counter.ID, TopicID: topicID}).Error
 			if err != nil {
 				tx.Rollback()
 				helpers.FormatErrorResponse(c, http.StatusInternalServerError, fmt.Sprintf("Failed to associate topic %d with counter", topicID))
@@ -138,64 +131,25 @@ func CreateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 			}
 		}
 
-		if err := tx.Commit(); err != nil {
+		if err := tx.Commit().Error; err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to commit transaction")
 			return
 		}
 
-		query := `
-		SELECT 
-			c.id, c.counter, c.status, c.time_closed,
-			u.id AS user_id, u.firstName_th, u.lastName_th, u.firstName_en, u.lastName_en, u.email,
-			t.id AS topic_id, t.topic_th, t.topic_en, t.code
-		FROM 
-			counters c
-		LEFT JOIN 
-			users u ON c.id = u.counter_id
-		LEFT JOIN 
-			counter_topics ct ON c.id = ct.counter_id
-		LEFT JOIN 
-			topics t ON ct.topic_id = t.id
-		WHERE 
-			c.id = $1;
-		`
-		rows, err := dbConn.Query(query, counterID)
+		var result models.Counter
+		err = db.Preload("User", func(db *gorm.DB) *gorm.DB {
+			return db.Select("ID", "CounterID", "FirstNameTH", "FirstNameEN", "LastNameTH", "LastNameEN", "Email")
+		}).Preload("Topics", func(db *gorm.DB) *gorm.DB { return db.Order("id ASC") }).Where("id = ?", counter.ID).First(&result).Error
 		if err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch counter data")
 			return
 		}
-		defer rows.Close()
 
-		var counter models.CounterWithUserWithTopics
-		var timeClosed time.Time
-		var user models.UserOnly
-		var topics []models.Topic
-		for rows.Next() {
-			var topic models.Topic
-			err := rows.Scan(
-				&counter.ID, &counter.Counter, &counter.Status, &timeClosed,
-				&user.ID, &user.FirstNameTH, &user.LastNameTH, &user.FirstNameEN, &user.LastNameEN, &user.Email,
-				&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code,
-			)
-			if err != nil {
-				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error processing row data")
-				return
-			}
-			topics = append(topics, topic)
-		}
-		if err := rows.Err(); err != nil {
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error processing rows")
-			return
-		}
-		counter.TimeClosed = timeClosed.Format("15:04:05")
-		counter.User = user
-		counter.Topic = topics
-
-		helpers.FormatSuccessResponse(c, counter)
+		helpers.FormatSuccessResponse(c, result)
 	}
 }
 
-func UpdateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
+func UpdateCounter(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr := c.Param("id")
 		id, err := strconv.Atoi(idStr)
@@ -215,8 +169,8 @@ func UpdateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 			return
 		}
 
-		tx, err := dbConn.Begin()
-		if err != nil {
+		tx := db.Begin()
+		if tx.Error != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to start transaction")
 			return
 		}
@@ -226,164 +180,115 @@ func UpdateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 			}
 		}()
 
-		updateFields := []string{}
-		updateValues := []interface{}{id}
-		placeholderIndex := 2
+		var counter models.Counter
+		err = tx.First(&counter, id).Error
+		if err != nil {
+			tx.Rollback()
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Counter not found")
+			return
+		}
+
 		if body.Counter != nil {
-			updateFields = append(updateFields, "counter = $"+strconv.Itoa(placeholderIndex))
-			updateValues = append(updateValues, *body.Counter)
-			placeholderIndex++
+			counter.Counter = *body.Counter
 		}
 		if body.Status != nil {
-			var statusValue int
-			if *body.Status {
-				statusValue = 1
-			} else {
-				statusValue = 0
-			}
-			updateFields = append(updateFields, "status = $"+strconv.Itoa(placeholderIndex))
-			updateValues = append(updateValues, statusValue)
-			placeholderIndex++
+			counter.Status = *body.Status
 		}
 		if body.TimeClosed != nil {
-			updateFields = append(updateFields, "time_closed = $"+strconv.Itoa(placeholderIndex))
-			updateValues = append(updateValues, *body.TimeClosed)
-			placeholderIndex++
+			counter.TimeClosed = *body.TimeClosed
 		}
+
+		err = tx.Save(&counter).Error
+		if err != nil {
+			tx.Rollback()
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update counter")
+			return
+		}
+
 		if body.Topics != nil {
-			if _, err := tx.Exec("DELETE FROM counter_topics WHERE counter_id = $1", id); err != nil {
-				_ = tx.Rollback()
+			err := tx.Where("counter_id = ?", counter.ID).Delete(&models.CounterTopic{}).Error
+			if err != nil {
+				tx.Rollback()
 				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to remove old topics")
 				return
 			}
 			for _, topicID := range *body.Topics {
-				if _, err := tx.Exec(
-					`INSERT INTO counter_topics (counter_id, topic_id) VALUES ($1, $2) 
-					 ON CONFLICT DO NOTHING`, id, topicID,
-				); err != nil {
-					_ = tx.Rollback()
+				err := tx.Create(&models.CounterTopic{
+					CounterID: counter.ID,
+					TopicID:   topicID,
+				}).Error
+				if err != nil {
+					tx.Rollback()
 					helpers.FormatErrorResponse(c, http.StatusInternalServerError, fmt.Sprintf("Failed to associate topic %d with counter", topicID))
 					return
 				}
 			}
 		}
-		if len(updateFields) > 0 {
-			query := "UPDATE counters SET " + helpers.Join(updateFields, ", ") + " WHERE id = $1"
-			if _, err := tx.Exec(query, updateValues...); err != nil {
-				if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
-					helpers.FormatErrorResponse(c, http.StatusBadRequest, fmt.Sprintf("The counter '%v' already exists.", *body.Counter))
-				} else {
-					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update counter")
-				}
-				return
-			}
-		}
+
 		if body.Email != nil {
-			var userID int64
-			selectQuery := "SELECT id FROM users WHERE email = $1"
-			err := tx.QueryRow(selectQuery, *body.Email).Scan(&userID)
-			if err != nil && err != sql.ErrNoRows {
+			var user models.User
+			err := tx.Where("email = ?", *body.Email).First(&user).Error
+			if err != nil && err != gorm.ErrRecordNotFound {
+				tx.Rollback()
 				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to check user")
 				return
 			}
-			if err == sql.ErrNoRows {
-				insertQuery := "INSERT INTO users (email, counter_id) VALUES ($1, $2)"
-				result, err := tx.Exec(insertQuery, *body.Email, id)
+			if err == gorm.ErrRecordNotFound {
+				user = models.User{
+					Email:     *body.Email,
+					CounterID: counter.ID,
+				}
+				err = tx.Create(&user).Error
 				if err != nil {
-					_ = tx.Rollback()
+					tx.Rollback()
 					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create user")
 					return
 				}
-				userID, err = result.LastInsertId()
-				if err != nil {
-					_ = tx.Rollback()
-					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to get new user ID")
-					return
-				}
 			} else {
-				updateUserQuery := "UPDATE users SET counter_id = $1 WHERE id = $2"
-				_, err = tx.Exec(updateUserQuery, id, userID)
+				user.CounterID = counter.ID
+				err = tx.Save(&user).Error
 				if err != nil {
-					_ = tx.Rollback()
+					tx.Rollback()
 					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update user with counter_id")
 					return
 				}
 			}
 		}
-		if err := tx.Commit(); err != nil {
+
+		err = tx.Commit().Error
+		if err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to commit transaction")
 			return
 		}
 
-		query := `
-		SELECT 
-			c.id, c.counter, c.status, c.time_closed,
-			u.id AS user_id, u.firstName_th, u.lastName_th, u.firstName_en, u.lastName_en, u.email,
-			t.id AS topic_id, t.topic_th, t.topic_en, t.code
-		FROM 
-			counters c
-		LEFT JOIN 
-			users u ON c.id = u.counter_id
-		LEFT JOIN 
-			counter_topics ct ON c.id = ct.counter_id
-		LEFT JOIN 
-			topics t ON ct.topic_id = t.id
-		WHERE 
-			c.id = $1;
-		`
-		rows, err := dbConn.Query(query, id)
+		var updatedCounter models.Counter
+		err = db.Preload("User", func(db *gorm.DB) *gorm.DB {
+			return db.Select("ID", "CounterID", "FirstNameTH", "FirstNameEN", "LastNameTH", "LastNameEN", "Email")
+		}).Preload("Topics", func(db *gorm.DB) *gorm.DB { return db.Order("id ASC") }).Where("id = ?", counter.ID).First(&updatedCounter).Error
 		if err != nil {
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch counter data")
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch updated counter data")
 			return
 		}
-		defer rows.Close()
-
-		var updatedCounter models.CounterWithUserWithTopics
-		var timeClosed time.Time
-		var user models.UserOnly
-		var topics []models.Topic
-		for rows.Next() {
-			var topic models.Topic
-			err := rows.Scan(
-				&updatedCounter.ID, &updatedCounter.Counter, &updatedCounter.Status, &timeClosed,
-				&user.ID, &user.FirstNameTH, &user.LastNameTH, &user.FirstNameEN, &user.LastNameEN, &user.Email,
-				&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code,
-			)
-			if err != nil {
-				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error processing row data")
-				return
-			}
-			topics = append(topics, topic)
-		}
-		if err := rows.Err(); err != nil {
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error processing rows")
-			return
-		}
-		updatedCounter.TimeClosed = timeClosed.Format("15:04:05")
-		updatedCounter.User = user
-		updatedCounter.Topic = topics
 
 		helpers.FormatSuccessResponse(c, updatedCounter)
 	}
 }
 
-func DeleteCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
+func DeleteCounter(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		result, err := dbConn.Exec("DELETE FROM counters WHERE id = $1", id)
-		if err != nil {
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to delete counter")
+		tx := db.Begin()
+		if err := tx.Model(&models.User{}).Where("counter_id = ?", id).Update("counter_id", nil).Error; err != nil {
+			tx.Rollback()
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update associated users")
 			return
 		}
-		rowsAffected, err := result.RowsAffected()
-		if err != nil {
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to verify deletion")
-			return
-		}
-		if rowsAffected == 0 {
+		if err := tx.Delete(&models.Counter{}, id).Error; err != nil {
+			tx.Rollback()
 			helpers.FormatErrorResponse(c, http.StatusNotFound, "Counter not found")
 			return
 		}
+		tx.Commit()
 		helpers.FormatSuccessResponse(c, map[string]string{"message": "Counter deleted successfully"})
 	}
 }

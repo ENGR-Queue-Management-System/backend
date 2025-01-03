@@ -1,15 +1,15 @@
 package api
 
 import (
-	"database/sql"
 	"net/http"
 	"src/helpers"
 	"src/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-func GetUserInfo(dbConn *sql.DB) gin.HandlerFunc {
+func GetUserInfo(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claims, err := helpers.ExtractToken(c)
 		if err != nil {
@@ -21,24 +21,19 @@ func GetUserInfo(dbConn *sql.DB) gin.HandlerFunc {
 			helpers.FormatErrorResponse(c, http.StatusUnauthorized, "Email claim is missing or invalid in token")
 			return
 		}
-		query := `SELECT * FROM users u
-		LEFT JOIN counters c
-		ON u.counter_id = c.id
-		WHERE email = $1`
-		row := dbConn.QueryRow(query, email)
 		var user models.User
-		var counter models.Counter
-		err = row.Scan(
-			&user.ID, &user.FirstNameTH, &user.LastNameTH,
-			&user.FirstNameEN, &user.LastNameEN, &user.Email, &user.CounterID,
-			&counter.ID, &counter.Counter, &counter.Status, &counter.TimeClosed,
-		)
-		if err == sql.ErrNoRows {
-			helpers.FormatErrorResponse(c, http.StatusNotFound, "User not found")
+		err = db.Preload("Counter", func(db *gorm.DB) *gorm.DB {
+			return db.Select("ID", "Counter", "TimeClosed", "Status")
+		}).Where("email = ?", email).First(&user).Error
+		if err != nil {
+			if err == gorm.ErrRecordNotFound {
+				helpers.FormatErrorResponse(c, http.StatusNotFound, "User not found")
+			} else {
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve user")
+			}
 			return
 		}
 
-		user.Counter = counter
 		helpers.FormatSuccessResponse(c, user)
 	}
 }

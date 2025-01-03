@@ -1,31 +1,26 @@
 package api
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"src/helpers"
+	"src/models"
 
 	"github.com/SherClockHolmes/webpush-go"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-func SendPushNotification(db *sql.DB, message string, userIdentifier map[string]string) error {
-	query := "SELECT endpoint, auth, p256dh FROM subscriptions WHERE firstname = $1 AND lastname = $2"
-	rows, err := db.Query(query, userIdentifier["firstName"], userIdentifier["lastName"])
+func SendPushNotification(db *gorm.DB, message string, userIdentifier map[string]string) error {
+	var subscriptions []models.Subscription
+	err := db.Where("first_name = ? AND last_name = ?", userIdentifier["firstName"], userIdentifier["lastName"]).Find(&subscriptions).Error
 	if err != nil {
-		return fmt.Errorf("error querying subscriptions: %v", err)
+		return fmt.Errorf("error fetching subscriptions: %v", err)
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var endpoint, auth, p256dh string
-		if err := rows.Scan(&endpoint, &auth, &p256dh); err != nil {
-			return fmt.Errorf("error scanning row: %v", err)
-		}
-
+	for _, subscription := range subscriptions {
 		options := &webpush.Options{
 			Subscriber:      "worapit2002@gmail.com",
 			VAPIDPublicKey:  os.Getenv("VAPID_PUBLIC_KEY"),
@@ -33,26 +28,28 @@ func SendPushNotification(db *sql.DB, message string, userIdentifier map[string]
 			TTL:             60,
 			Urgency:         "high",
 		}
+
 		response, err := webpush.SendNotification([]byte(message), &webpush.Subscription{
-			Endpoint: endpoint,
+			Endpoint: subscription.Endpoint,
 			Keys: webpush.Keys{
-				Auth:   auth,
-				P256dh: p256dh,
+				Auth:   subscription.Auth,
+				P256dh: subscription.P256dh,
 			},
 		}, options)
+
 		if err != nil {
-			log.Printf("Error sending notification to %s: %v", endpoint, err)
+			log.Printf("Error sending notification to %s: %v", subscription.Endpoint, err)
 		} else {
-			log.Printf("Successfully sent notification to %s. Response status: %s", endpoint, response.Status)
+			log.Printf("Successfully sent notification to %s. Response status: %s", subscription.Endpoint, response.Status)
 		}
 
-		fmt.Printf("Sent notification to %s\n", endpoint)
+		fmt.Printf("Sent notification to %s\n", subscription.Endpoint)
 	}
 
 	return nil
 }
 
-func SendNotificationTrigger(db *sql.DB) gin.HandlerFunc {
+func SendNotificationTrigger(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		body := new(struct {
 			FirstName string `json:"firstName"`
@@ -77,33 +74,24 @@ func SendNotificationTrigger(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func GetSubscription(db *sql.DB) gin.HandlerFunc {
+func GetSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		query := "SELECT firstname, lastname FROM subscriptions"
-		rows, err := db.Query(query)
+		var subscriptions []models.Subscription
+		err := db.Find(&subscriptions).Error
 		if err != nil {
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, fmt.Sprintf("error executing query: %v", err))
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, fmt.Sprintf("error retrieving subscriptions: %v", err))
 			return
 		}
-		defer rows.Close()
 
-		var subscriptions []map[string]string
-		for rows.Next() {
-			var firstName, lastName string
-			if err := rows.Scan(&firstName, &lastName); err != nil {
-				helpers.FormatErrorResponse(c, http.StatusInternalServerError, fmt.Sprintf("error scanning row: %v", err))
-				return
-			}
+		var subscriptionList []map[string]string
+		for _, sub := range subscriptions {
 			subscription := map[string]string{
-				"firstName": firstName,
-				"lastName":  lastName,
+				"firstName": sub.FirstName,
+				"lastName":  sub.LastName,
 			}
-			subscriptions = append(subscriptions, subscription)
+			subscriptionList = append(subscriptionList, subscription)
 		}
-		if err := rows.Err(); err != nil {
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, fmt.Sprintf("error iterating over rows: %v", err))
-			return
-		}
-		helpers.FormatSuccessResponse(c, subscriptions)
+
+		helpers.FormatSuccessResponse(c, subscriptionList)
 	}
 }

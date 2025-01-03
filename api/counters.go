@@ -3,7 +3,6 @@ package api
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"net/http"
 	"src/helpers"
 	"src/models"
@@ -208,11 +207,24 @@ func UpdateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 			Status     *bool   `json:"status"`
 			TimeClosed *string `json:"timeClosed"`
 			Email      *string `json:"email"`
+			Topics     *[]int  `json:"topics"`
 		})
 		if err := c.ShouldBindJSON(&body); err != nil {
 			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid request body")
 			return
 		}
+
+		tx, err := dbConn.Begin()
+		if err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to start transaction")
+			return
+		}
+		defer func() {
+			if p := recover(); p != nil {
+				tx.Rollback()
+			}
+		}()
+
 		updateFields := []string{}
 		updateValues := []interface{}{id}
 		placeholderIndex := 2
@@ -237,64 +249,116 @@ func UpdateCounter(dbConn *sql.DB, server *socketio.Server) gin.HandlerFunc {
 			updateValues = append(updateValues, *body.TimeClosed)
 			placeholderIndex++
 		}
-		if len(updateFields) == 0 {
-			helpers.FormatErrorResponse(c, http.StatusBadRequest, "No fields to update")
-			return
+		if body.Topics != nil {
+			if _, err := tx.Exec("DELETE FROM counter_topics WHERE counter_id = $1", id); err != nil {
+				_ = tx.Rollback()
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to remove old topics")
+				return
+			}
+			for _, topicID := range *body.Topics {
+				if _, err := tx.Exec(
+					`INSERT INTO counter_topics (counter_id, topic_id) VALUES ($1, $2) 
+					 ON CONFLICT DO NOTHING`, id, topicID,
+				); err != nil {
+					_ = tx.Rollback()
+					helpers.FormatErrorResponse(c, http.StatusInternalServerError, fmt.Sprintf("Failed to associate topic %d with counter", topicID))
+					return
+				}
+			}
 		}
-
-		query := "UPDATE counters SET " + helpers.Join(updateFields, ", ") + " WHERE id = $1"
-		_, err = dbConn.Exec(query, updateValues...)
-		if err != nil {
-			log.Printf("Error executing query: %v, Query: %s, Values: %v", err, query, updateValues)
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update counter")
-			return
+		if len(updateFields) > 0 {
+			query := "UPDATE counters SET " + helpers.Join(updateFields, ", ") + " WHERE id = $1"
+			if _, err := tx.Exec(query, updateValues...); err != nil {
+				_ = tx.Rollback()
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update counter")
+				return
+			}
 		}
 		if body.Email != nil {
 			var userID int64
 			selectQuery := "SELECT id FROM users WHERE email = $1"
-			err := dbConn.QueryRow(selectQuery, *body.Email).Scan(&userID)
+			err := tx.QueryRow(selectQuery, *body.Email).Scan(&userID)
 			if err != nil && err != sql.ErrNoRows {
 				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to check user")
 				return
 			}
 			if err == sql.ErrNoRows {
 				insertQuery := "INSERT INTO users (email, counter_id) VALUES ($1, $2)"
-				result, err := dbConn.Exec(insertQuery, *body.Email, id)
+				result, err := tx.Exec(insertQuery, *body.Email, id)
 				if err != nil {
+					_ = tx.Rollback()
 					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create user")
 					return
 				}
 				userID, err = result.LastInsertId()
 				if err != nil {
+					_ = tx.Rollback()
 					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to get new user ID")
 					return
 				}
 			} else {
 				updateUserQuery := "UPDATE users SET counter_id = $1 WHERE id = $2"
-				_, err = dbConn.Exec(updateUserQuery, id, userID)
+				_, err = tx.Exec(updateUserQuery, id, userID)
 				if err != nil {
+					_ = tx.Rollback()
 					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update user with counter_id")
 					return
 				}
 			}
 		}
+		if err := tx.Commit(); err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to commit transaction")
+			return
+		}
+
+		query := `
+		SELECT 
+			c.id, c.counter, c.status, c.time_closed,
+			u.id AS user_id, u.firstName_th, u.lastName_th, u.firstName_en, u.lastName_en, u.email,
+			t.id AS topic_id, t.topic_th, t.topic_en, t.code
+		FROM 
+			counters c
+		LEFT JOIN 
+			users u ON c.id = u.counter_id
+		LEFT JOIN 
+			counter_topics ct ON c.id = ct.counter_id
+		LEFT JOIN 
+			topics t ON ct.topic_id = t.id
+		WHERE 
+			c.id = $1;
+		`
+		rows, err := dbConn.Query(query, id)
+		if err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch counter data")
+			return
+		}
+		defer rows.Close()
+
 		var updatedCounter models.CounterWithUserWithTopics
-		selectQuery := `SELECT c.id, c.counter, c.status, c.time_closed, 
-                        u.id, u.firstName_TH, u.lastName_TH, u.firstName_EN, u.lastName_EN, u.email 
-                        FROM counters c LEFT JOIN users u ON c.id = u.counter_id 
-                        WHERE c.id = $1`
-		row := dbConn.QueryRow(selectQuery, id)
 		var timeClosed time.Time
 		var user models.UserOnly
-		if err := row.Scan(
-			&updatedCounter.ID, &updatedCounter.Counter, &updatedCounter.Status, &timeClosed,
-			&user.ID, &user.FirstNameTH, &user.LastNameTH, &user.FirstNameEN, &user.LastNameEN, &user.Email,
-		); err != nil {
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch updated counter")
+		var topics []models.Topic
+		for rows.Next() {
+			var topic models.Topic
+			err := rows.Scan(
+				&updatedCounter.ID, &updatedCounter.Counter, &updatedCounter.Status, &timeClosed,
+				&user.ID, &user.FirstNameTH, &user.LastNameTH, &user.FirstNameEN, &user.LastNameEN, &user.Email,
+				&topic.ID, &topic.TopicTH, &topic.TopicEN, &topic.Code,
+			)
+			if err != nil {
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error processing row data")
+				return
+			}
+			topics = append(topics, topic)
+		}
+		if err := rows.Err(); err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Error processing rows")
 			return
 		}
 		updatedCounter.TimeClosed = timeClosed.Format("15:04:05")
 		updatedCounter.User = user
+		updatedCounter.Topic = topics
+
 		helpers.FormatSuccessResponse(c, updatedCounter)
 	}
 }

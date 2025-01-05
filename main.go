@@ -55,7 +55,7 @@ func main() {
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
-	router.GET("/ws", func(c *gin.Context) {
+	router.GET("/api", func(c *gin.Context) {
 		api.ServeWs(hub, c.Writer, c.Request)
 	})
 

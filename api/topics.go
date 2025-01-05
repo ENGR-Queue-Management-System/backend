@@ -7,22 +7,32 @@ import (
 	"src/models"
 
 	"github.com/gin-gonic/gin"
-	socketio "github.com/googollee/go-socket.io"
 	"gorm.io/gorm"
 )
 
 func GetTopics(dbConn *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var topics []models.Topic
-		if err := dbConn.Find(&topics).Order("id ASC").Error; err != nil {
-			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch topics")
+		var topics []struct {
+			ID      int    `json:"id"`
+			TopicTH string `json:"topicTH"`
+			TopicEN string `json:"topicEN"`
+			Code    string `json:"code"`
+			Waiting int    `json:"waiting"`
+		}
+		if err := dbConn.Table("topics").
+			Select("topics.id, topics.topic_th, topics.topic_en, topics.code, COUNT(queues.id) AS waiting").
+			Joins("LEFT JOIN queues ON queues.topic_id = topics.id AND queues.status IN (?, ?)", helpers.WAITING, helpers.IN_PROGRESS).
+			Group("topics.id").
+			Order("topics.id ASC").
+			Scan(&topics).Error; err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch topics with waiting queues")
 			return
 		}
 		helpers.FormatSuccessResponse(c, topics)
 	}
 }
 
-func CreateTopic(dbConn *gorm.DB, server *socketio.Server) gin.HandlerFunc {
+func CreateTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body struct {
 			TopicTH string `json:"topicTH"`
@@ -57,7 +67,7 @@ func CreateTopic(dbConn *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 	}
 }
 
-func UpdateTopic(dbConn *gorm.DB, server *socketio.Server) gin.HandlerFunc {
+func UpdateTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		var body struct {
@@ -100,7 +110,7 @@ func UpdateTopic(dbConn *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 	}
 }
 
-func DeleteTopic(dbConn *gorm.DB, server *socketio.Server) gin.HandlerFunc {
+func DeleteTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		if err := dbConn.Delete(&models.Topic{}, id).Error; err != nil {

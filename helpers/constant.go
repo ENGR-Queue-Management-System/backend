@@ -12,5 +12,3 @@ const (
 	ADMIN   = "Admin"
 	STUDENT = "Student"
 )
-
-const SOCKET = "/"

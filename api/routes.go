@@ -6,7 +6,6 @@ import (
 	"src/models"
 
 	"github.com/gin-gonic/gin"
-	socketio "github.com/googollee/go-socket.io"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -63,7 +62,7 @@ func SaveSubscription(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, server *socketio.Server) {
+func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, hub *Hub) {
 	r.POST("/subscribe", SaveSubscription(db))
 	r.POST("/send-notification", SendNotificationTrigger(db))
 	r.GET("/test-send-noti", GetSubscription(db))
@@ -71,23 +70,23 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, server *socketio.Server) {
 	r.POST("/authentication", Authentication(db))
 
 	r.GET("/config", GetConfig(db))
-	r.PUT("/config/login-not-cmu", SetLoginNotCmu(db, server))
+	r.PUT("/config/login-not-cmu", SetLoginNotCmu(db, hub))
 
 	r.GET("/user", GetUserInfo(db))
 
 	r.GET("/counter", GetCounters(db))
-	r.POST("/counter", CreateCounter(db, server))
-	r.PUT("/counter/:id", UpdateCounter(db, server))
-	r.DELETE("/counter/:id", DeleteCounter(db, server))
+	r.POST("/counter", CreateCounter(db, hub))
+	r.PUT("/counter/:id", UpdateCounter(db, hub))
+	r.DELETE("/counter/:id", DeleteCounter(db, hub))
 
 	r.GET("/topic", GetTopics(db))
-	r.POST("/topic", CreateTopic(db, server))
-	r.PUT("/topic/:id", UpdateTopic(db, server))
-	r.DELETE("/topic/:id", DeleteTopic(db, server))
+	r.POST("/topic", CreateTopic(db, hub))
+	r.PUT("/topic/:id", UpdateTopic(db, hub))
+	r.DELETE("/topic/:id", DeleteTopic(db, hub))
 
 	r.GET("/queue", GetQueues(db))
 	r.GET("/queue/student", GetStudentQueue(db))
-	r.POST("/queue", CreateQueue(db, server))
-	r.PUT("/queue/:id", UpdateQueue(db, server))
-	r.DELETE("/queue/:id", DeleteQueue(db, server))
+	r.POST("/queue", CreateQueue(db, hub))
+	r.PUT("/queue/:id", UpdateQueue(db, hub))
+	r.DELETE("/queue/:id", DeleteQueue(db, hub))
 }

@@ -6,11 +6,9 @@ import (
 	"os"
 	"src/api"
 	"src/db"
-	"src/helpers"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	socketio "github.com/googollee/go-socket.io"
 	"github.com/joho/godotenv"
 )
 
@@ -33,6 +31,9 @@ func main() {
 
 	db.StartCounterStatusUpdater(dbConn, time.Minute)
 
+	hub := api.NewHub()
+	go hub.Run()
+
 	router := gin.Default()
 	router.Use(func(c *gin.Context) {
 		if c.Request.ContentLength > 2*1024*1024 { // 2 MB
@@ -49,36 +50,17 @@ func main() {
 			c.AbortWithStatus(http.StatusOK)
 			return
 		}
-		c.Request.Header.Del("Origin")
 		c.Next()
 	})
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
-	server := socketio.NewServer(nil)
-	server.OnConnect(helpers.SOCKET, func(s socketio.Conn) error {
-		s.SetContext("")
-		println("New connection:", s.ID())
-		return nil
+	router.GET("/ws", func(c *gin.Context) {
+		api.ServeWs(hub, c.Writer, c.Request)
 	})
-	server.OnDisconnect(helpers.SOCKET, func(s socketio.Conn, reason string) {
-		println("Disconnected:", s.ID(), reason)
-	})
-	// server.OnEvent(helpers.SOCKET, "setLoginNotCmu", func(s socketio.Conn, msg string) {})
-	// server.OnEvent(helpers.SOCKET, "addQueue", func(s socketio.Conn, msg string) {})
-
-	go func() {
-		if err := server.Serve(); err != nil {
-			log.Fatal(err)
-		}
-	}()
-	defer server.Close()
-
-	router.GET("/socket.io/*any", gin.WrapH(server))
-	router.POST("/socket.io/*any", gin.WrapH(server))
 
 	apiV1 := router.Group("/api/v1")
-	api.RegisterRoutes(apiV1, dbConn, server)
+	api.RegisterRoutes(apiV1, dbConn, hub)
 
 	log.Fatal(router.Run(":" + port))
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	socketio "github.com/googollee/go-socket.io"
 	"gorm.io/gorm"
 )
 
@@ -46,7 +46,7 @@ func GetCounters(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func CreateCounter(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
+func CreateCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		body := new(struct {
 			Counter    string `json:"counter"`
@@ -149,7 +149,7 @@ func CreateCounter(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 	}
 }
 
-func UpdateCounter(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
+func UpdateCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr := c.Param("id")
 		id, err := strconv.Atoi(idStr)
@@ -270,11 +270,17 @@ func UpdateCounter(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 			return
 		}
 
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "updateCounter",
+			"data":  updatedCounter,
+		})
+		hub.broadcast <- message
+
 		helpers.FormatSuccessResponse(c, updatedCounter)
 	}
 }
 
-func DeleteCounter(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
+func DeleteCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		tx := db.Begin()

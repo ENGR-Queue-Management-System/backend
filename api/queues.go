@@ -1,13 +1,13 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"src/helpers"
 	"src/models"
 
 	"github.com/gin-gonic/gin"
-	socketio "github.com/googollee/go-socket.io"
 	"gorm.io/gorm"
 )
 
@@ -92,7 +92,7 @@ func GetStudentQueue(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func CreateQueue(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
+func CreateQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body ReserveDTO
 		if err := c.Bind(&body); err != nil || body.Topic == 0 {
@@ -191,6 +191,14 @@ func CreateQueue(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve queue details")
 			return
 		}
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "addQueue",
+			"data": map[string]interface{}{
+				"queue":   queue,
+				"waiting": countWaitingAfterInProgress,
+			},
+		})
+		hub.broadcast <- message
 
 		if body.FirstName != nil && body.LastName != nil {
 			tokenString, err := generateJWTToken(body, true)
@@ -199,7 +207,6 @@ func CreateQueue(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 				return
 			}
 
-			// server.BroadcastToNamespace(helpers.SOCKET, "addQueue", queue)
 			helpers.FormatSuccessResponse(c, map[string]interface{}{
 				"token":   tokenString,
 				"queue":   queue,
@@ -208,7 +215,6 @@ func CreateQueue(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 			return
 		}
 
-		// server.BroadcastToNamespace(helpers.SOCKET, "addQueue", queue)
 		helpers.FormatSuccessResponse(c, map[string]interface{}{
 			"queue":   queue,
 			"waiting": countWaitingAfterInProgress,
@@ -216,18 +222,19 @@ func CreateQueue(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 	}
 }
 
-func UpdateQueue(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
+func UpdateQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		body := new(struct {
 			Counter int `json:"counter"`
+			Current int `json:"current"`
 		})
 		if err := c.ShouldBindJSON(body); err != nil {
 			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 		tx := db.Begin()
-		if err := tx.Model(&models.Queue{}).Where("status = ? AND counter_id = ?", helpers.IN_PROGRESS, body.Counter).Update("status", helpers.CALLED).Error; err != nil {
+		if err := tx.Model(&models.Queue{}).Where("id = ?", body.Current).Update("status", helpers.CALLED).Error; err != nil {
 			tx.Rollback()
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update current queue to CALLED")
 			return
@@ -241,7 +248,7 @@ func UpdateQueue(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 			return
 		}
 		var currentQueue models.Queue
-		if err := tx.First(&currentQueue, id).Error; err != nil {
+		if err := tx.Preload("Topic").First(&currentQueue, id).Error; err != nil {
 			tx.Rollback()
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch current queue")
 			return
@@ -251,17 +258,33 @@ func UpdateQueue(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 			return
 		}
 
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "updateQueue",
+			"data": map[string]interface{}{
+				"current": currentQueue,
+				"called":  body.Current,
+			},
+		})
+		hub.broadcast <- message
+
 		helpers.FormatSuccessResponse(c, currentQueue)
 	}
 }
 
-func DeleteQueue(db *gorm.DB, server *socketio.Server) gin.HandlerFunc {
+func DeleteQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		if err := db.Delete(&models.Queue{}, id).Error; err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to delete queue")
 			return
 		}
+
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "deleteQueue",
+			"data":  id,
+		})
+		hub.broadcast <- message
+
 		helpers.FormatSuccessResponse(c, map[string]string{"message": "Queue deleted successfully"})
 	}
 }

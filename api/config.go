@@ -1,12 +1,12 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"src/helpers"
 	"src/models"
 
 	"github.com/gin-gonic/gin"
-	socketio "github.com/googollee/go-socket.io"
 	"gorm.io/gorm"
 )
 
@@ -25,7 +25,7 @@ func GetConfig(dbConn *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func SetLoginNotCmu(dbConn *gorm.DB, server *socketio.Server) gin.HandlerFunc {
+func SetLoginNotCmu(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		body := new(struct {
 			LoginNotCmu bool `json:"loginNotCmu"`
@@ -40,7 +40,12 @@ func SetLoginNotCmu(dbConn *gorm.DB, server *socketio.Server) gin.HandlerFunc {
 			return
 		}
 
-		// server.BroadcastToNamespace(helpers.SOCKET, "setLoginNotCmu", body.LoginNotCmu)
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "setLoginNotCmu",
+			"data":  body.LoginNotCmu,
+		})
+		hub.broadcast <- message
+
 		helpers.FormatSuccessResponse(c, map[string]interface{}{"message": "Config updated successfully"})
 	}
 }

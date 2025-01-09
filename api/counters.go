@@ -26,6 +26,17 @@ func GetCounters(db *gorm.DB) gin.HandlerFunc {
 		}
 		var response []models.CounterResponse
 		for _, counter := range counters {
+			var currentQueue *models.Queue
+			err := db.Where("status = ? AND counter_id = ?", helpers.IN_PROGRESS, counter.ID).First(&currentQueue).Error
+			if err != nil {
+				if err == gorm.ErrRecordNotFound {
+					currentQueue = nil
+				} else {
+					log.Println("Error fetching current queue for counter:", err)
+					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch current queue")
+					return
+				}
+			}
 			response = append(response, models.CounterResponse{
 				ID:         counter.ID,
 				Counter:    counter.Counter,
@@ -39,7 +50,8 @@ func GetCounters(db *gorm.DB) gin.HandlerFunc {
 					LastNameEN:  counter.User.LastNameEN,
 					Email:       counter.User.Email,
 				},
-				Topics: counter.Topics,
+				Topics:       counter.Topics,
+				CurrentQueue: currentQueue,
 			})
 		}
 		helpers.FormatSuccessResponse(c, response)
@@ -144,6 +156,12 @@ func CreateCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch counter data")
 			return
 		}
+
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "addCounter",
+			"data":  result,
+		})
+		hub.broadcast <- message
 
 		helpers.FormatSuccessResponse(c, result)
 	}
@@ -295,6 +313,13 @@ func DeleteCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 		tx.Commit()
+
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "deleteCounter",
+			"data":  id,
+		})
+		hub.broadcast <- message
+
 		helpers.FormatSuccessResponse(c, map[string]string{"message": "Counter deleted successfully"})
 	}
 }

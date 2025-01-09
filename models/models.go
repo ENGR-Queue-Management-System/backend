@@ -86,10 +86,11 @@ type UserWithoutCounter struct {
 }
 
 type CounterResponse struct {
-	ID         int                `json:"id"`
-	Counter    string             `json:"counter"`
-	Status     bool               `json:"status"`
-	TimeClosed string             `json:"timeClosed"`
-	User       UserWithoutCounter `json:"user"`
-	Topics     []Topic            `json:"topics"`
+	ID           int                `json:"id"`
+	Counter      string             `json:"counter"`
+	Status       bool               `json:"status"`
+	TimeClosed   string             `json:"timeClosed"`
+	User         UserWithoutCounter `json:"user"`
+	Topics       []Topic            `json:"topics"`
+	CurrentQueue *Queue             `json:"currentQueue"`
 }

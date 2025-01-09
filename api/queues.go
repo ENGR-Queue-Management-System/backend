@@ -41,21 +41,7 @@ func GetQueues(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		var currentQueue models.Queue
-		if err := db.Where("status = ? AND counter_id = ?", helpers.IN_PROGRESS, counterID).First(&currentQueue).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				currentQueue = models.Queue{}
-			} else {
-				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch current queue")
-				return
-			}
-		}
-
-		helpers.FormatSuccessResponse(c, map[string]interface{}{
-			"queues":  waitingQueues,
-			"current": currentQueue,
-		})
-
+		helpers.FormatSuccessResponse(c, waitingQueues)
 	}
 }
 

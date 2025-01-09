@@ -64,11 +64,11 @@ func CreateTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		message, _ := json.Marshal(map[string]interface{}{
-			"event": "addTopic",
-			"data":  topic,
-		})
-		hub.broadcast <- message
+		// message, _ := json.Marshal(map[string]interface{}{
+		// 	"event": "addTopic",
+		// 	"data":  topic,
+		// })
+		// hub.broadcast <- message
 
 		helpers.FormatSuccessResponse(c, topic)
 	}
@@ -131,11 +131,11 @@ func DeleteTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		message, _ := json.Marshal(map[string]interface{}{
-			"event": "deleteTopic",
-			"data":  id,
-		})
-		hub.broadcast <- message
+		// message, _ := json.Marshal(map[string]interface{}{
+		// 	"event": "deleteTopic",
+		// 	"data":  id,
+		// })
+		// hub.broadcast <- message
 
 		helpers.FormatSuccessResponse(c, map[string]string{"message": "Topic deleted successfully"})
 	}

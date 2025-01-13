@@ -222,6 +222,18 @@ func UpdateCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
+		if body.Status != nil && !*body.Status {
+			err = tx.Model(&models.Queue{}).
+				Where("counter_id = ? AND status = ?", counter.ID, helpers.IN_PROGRESS).
+				Update("status", helpers.CALLED).
+				Error
+			if err != nil {
+				tx.Rollback()
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update queue status")
+				return
+			}
+		}
+
 		if body.Topics != nil {
 			err := tx.Where("counter_id = ?", counter.ID).Delete(&models.CounterTopic{}).Error
 			if err != nil {

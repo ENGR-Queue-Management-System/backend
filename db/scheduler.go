@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"log"
+	"src/helpers"
 	"src/models"
 	"time"
 
@@ -26,12 +27,38 @@ func UpdateCounterStatus(db *gorm.DB) error {
 	startTime := now.Add(-1 * time.Minute)
 	endTime := now.Add(1 * time.Minute)
 
-	result := db.Model(&models.Counter{}).
+	tx := db.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("failed to start transaction: %v", tx.Error)
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	result := tx.Model(&models.Counter{}).
 		Where("time_closed BETWEEN ? AND ? AND status = ?", startTime, endTime, true).
 		Update("status", false)
 
 	if result.Error != nil {
+		tx.Rollback()
 		return fmt.Errorf("failed to update counter status: %v", result.Error)
+	}
+
+	if result.RowsAffected > 0 {
+		err := tx.Model(&models.Queue{}).
+			Where("counter_id IN (?) AND status = ?", tx.Model(&models.Counter{}).Select("id").Where("status = false"), helpers.IN_PROGRESS).
+			Update("status", helpers.CALLED).Error
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to update queue status: %v", err)
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
 	log.Printf("Successfully updated %d counters' status", result.RowsAffected)

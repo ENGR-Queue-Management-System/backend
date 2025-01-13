@@ -86,6 +86,7 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, hub *Hub) {
 
 	r.GET("/queue", GetQueues(db))
 	r.GET("/queue/student", GetStudentQueue(db))
+	r.GET("/queue/called", GetCalledQueues(db))
 	r.POST("/queue", CreateQueue(db, hub))
 	r.PUT("/queue/:id", UpdateQueue(db, hub))
 	r.DELETE("/queue/:id", DeleteQueue(db, hub))

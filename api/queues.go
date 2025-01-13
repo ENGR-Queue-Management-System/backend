@@ -78,6 +78,21 @@ func GetStudentQueue(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+func GetCalledQueues(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var calledQueues []models.Queue
+		if err := db.Preload("Topic").
+			Where("status = ?", helpers.CALLED).
+			Order("created_at DESC, no DESC").
+			Find(&calledQueues).Error; err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch waiting queues")
+			return
+		}
+
+		helpers.FormatSuccessResponse(c, calledQueues)
+	}
+}
+
 func CreateQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body ReserveDTO

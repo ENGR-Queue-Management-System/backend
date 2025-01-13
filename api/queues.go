@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"src/helpers"
 	"src/models"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -92,8 +93,10 @@ func CreateQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
+		today := time.Now().Format("2006-01-02")
+
 		var lastQueueNo string
-		err = db.Model(&models.Queue{}).Where("topic_id = ?", body.Topic).Order("no DESC").Limit(1).Pluck("no", &lastQueueNo).Error
+		err = db.Model(&models.Queue{}).Where("topic_id = ? AND DATE(created_at) = ?", body.Topic, today).Order("no DESC").Limit(1).Pluck("no", &lastQueueNo).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve the last queue number")
 			return

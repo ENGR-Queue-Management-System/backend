@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"src/helpers"
@@ -113,11 +112,11 @@ func UpdateTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		message, _ := json.Marshal(map[string]interface{}{
-			"event": "updateTopic",
-			"data":  topic,
-		})
-		hub.broadcast <- message
+		// message, _ := json.Marshal(map[string]interface{}{
+		// 	"event": "updateTopic",
+		// 	"data":  topic,
+		// })
+		// hub.broadcast <- message
 
 		helpers.FormatSuccessResponse(c, topic)
 	}

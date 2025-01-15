@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"src/helpers"
 	"src/models"
@@ -39,11 +40,11 @@ func SetLoginNotCmu(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		// message, _ := json.Marshal(map[string]interface{}{
-		// 	"event": "setLoginNotCmu",
-		// 	"data":  body.LoginNotCmu,
-		// })
-		// hub.broadcast <- message
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "setLoginNotCmu",
+			"data":  body.LoginNotCmu,
+		})
+		hub.broadcast <- message
 
 		helpers.FormatSuccessResponse(c, map[string]interface{}{"message": "Config updated successfully"})
 	}

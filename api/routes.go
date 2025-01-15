@@ -64,7 +64,7 @@ func SaveSubscription(db *gorm.DB) gin.HandlerFunc {
 
 func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, hub *Hub) {
 	r.POST("/subscribe", SaveSubscription(db))
-	r.POST("/send-notification", SendNotificationTrigger(db))
+	r.POST("/send-notification", SendNotificationTrigger(db, hub))
 	r.GET("/test-send-noti", GetSubscription(db))
 
 	r.POST("/authentication", Authentication(db))

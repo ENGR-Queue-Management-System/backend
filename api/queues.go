@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"src/helpers"
@@ -194,14 +195,14 @@ func CreateQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve queue details")
 			return
 		}
-		// message, _ := json.Marshal(map[string]interface{}{
-		// 	"event": "addQueue",
-		// 	"data": map[string]interface{}{
-		// 		"queue":   queue,
-		// 		"waiting": countWaitingAfterInProgress,
-		// 	},
-		// })
-		// hub.broadcast <- message
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "addQueue",
+			"data": map[string]interface{}{
+				"queue":   queue,
+				"waiting": countWaitingAfterInProgress,
+			},
+		})
+		hub.broadcast <- message
 
 		if body.FirstName != nil && body.LastName != nil {
 			tokenString, err := generateJWTToken(body, true)
@@ -261,14 +262,14 @@ func UpdateQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		// message, _ := json.Marshal(map[string]interface{}{
-		// 	"event": "updateQueue",
-		// 	"data": map[string]interface{}{
-		// 		"current": currentQueue,
-		// 		"called":  body.Current,
-		// 	},
-		// })
-		// hub.broadcast <- message
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "updateQueue",
+			"data": map[string]interface{}{
+				"current": currentQueue,
+				"called":  body.Current,
+			},
+		})
+		hub.broadcast <- message
 
 		helpers.FormatSuccessResponse(c, currentQueue)
 	}
@@ -282,11 +283,11 @@ func DeleteQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		// message, _ := json.Marshal(map[string]interface{}{
-		// 	"event": "deleteQueue",
-		// 	"data":  id,
-		// })
-		// hub.broadcast <- message
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "deleteQueue",
+			"data":  id,
+		})
+		hub.broadcast <- message
 
 		helpers.FormatSuccessResponse(c, map[string]string{"message": "Queue deleted successfully"})
 	}

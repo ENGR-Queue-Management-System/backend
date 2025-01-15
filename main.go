@@ -56,9 +56,9 @@ func main() {
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
-	// router.GET("/api", func(c *gin.Context) {
-	// 	api.ServeWs(hub, c.Writer, c.Request)
-	// })
+	router.GET("/api", func(c *gin.Context) {
+		api.ServeWs(hub, c.Writer, c.Request)
+	})
 
 	apiV1 := router.Group("/api/v1")
 	api.RegisterRoutes(apiV1, dbConn, hub)

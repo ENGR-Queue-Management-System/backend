@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,7 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SendPushNotification(db *gorm.DB, message string, userIdentifier map[string]string) error {
+func SendPushNotification(db *gorm.DB, hub *Hub, message string, userIdentifier map[string]string, queue map[string]interface{}) error {
 	var subscriptions []models.Subscription
 	err := db.Where("first_name = ? AND last_name = ?", userIdentifier["firstName"], userIdentifier["lastName"]).Find(&subscriptions).Error
 	if err != nil {
@@ -37,6 +38,14 @@ func SendPushNotification(db *gorm.DB, message string, userIdentifier map[string
 			},
 		}, options)
 
+		if queue != nil {
+			message, _ := json.Marshal(map[string]interface{}{
+				"event": "recallQueue",
+				"data":  queue,
+			})
+			hub.broadcast <- message
+		}
+
 		if err != nil {
 			log.Printf("Error sending notification to %s: %v", subscription.Endpoint, err)
 		} else {
@@ -49,22 +58,34 @@ func SendPushNotification(db *gorm.DB, message string, userIdentifier map[string
 	return nil
 }
 
-func SendNotificationTrigger(db *gorm.DB) gin.HandlerFunc {
+func SendNotificationTrigger(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		body := new(struct {
-			FirstName string `json:"firstName"`
-			LastName  string `json:"lastName"`
-			Message   string `json:"message"`
+			No        *string `json:"no"`
+			Counter   *string `json:"counter"`
+			FirstName string  `json:"firstName"`
+			LastName  string  `json:"lastName"`
+			Message   string  `json:"message"`
 		})
 		if err := c.Bind(body); err != nil {
 			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
-		if err := SendPushNotification(db, body.Message, map[string]string{
+		userIdentifier := map[string]string{
 			"firstName": body.FirstName,
 			"lastName":  body.LastName,
-		}); err != nil {
+		}
+
+		var queueData map[string]interface{}
+		if body.No != nil {
+			queueData = map[string]interface{}{
+				"no":      body.No,
+				"counter": body.Counter,
+			}
+		}
+
+		if err := SendPushNotification(db, hub, body.Message, userIdentifier, queueData); err != nil {
 			log.Printf("Error sending notification: %v", err)
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, err.Error())
 			return

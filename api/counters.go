@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -156,11 +157,11 @@ func CreateCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		// message, _ := json.Marshal(map[string]interface{}{
-		// 	"event": "addCounter",
-		// 	"data":  result,
-		// })
-		// hub.broadcast <- message
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "addCounter",
+			"data":  result,
+		})
+		hub.broadcast <- message
 
 		helpers.FormatSuccessResponse(c, result)
 	}
@@ -223,15 +224,32 @@ func UpdateCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 		}
 
 		if body.Status != nil && !*body.Status {
+			var queue models.Queue
 			err = tx.Model(&models.Queue{}).
 				Where("counter_id = ? AND status = ?", counter.ID, helpers.IN_PROGRESS).
-				Update("status", helpers.CALLED).
-				Error
+				First(&queue).Error
+			if err != nil {
+				tx.Rollback()
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch queue")
+				return
+			}
+			err = tx.Model(&models.Queue{}).
+				Where("id = ?", queue.ID).
+				Update("status", helpers.CALLED).Error
 			if err != nil {
 				tx.Rollback()
 				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update queue status")
 				return
 			}
+
+			message, _ := json.Marshal(map[string]interface{}{
+				"event": "updateQueue",
+				"data": map[string]interface{}{
+					"current": nil,
+					"called":  queue,
+				},
+			})
+			hub.broadcast <- message
 		}
 
 		if body.Topics != nil {
@@ -299,11 +317,11 @@ func UpdateCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		// message, _ := json.Marshal(map[string]interface{}{
-		// 	"event": "updateCounter",
-		// 	"data":  updatedCounter,
-		// })
-		// hub.broadcast <- message
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "updateCounter",
+			"data":  updatedCounter,
+		})
+		hub.broadcast <- message
 
 		helpers.FormatSuccessResponse(c, updatedCounter)
 	}
@@ -325,11 +343,11 @@ func DeleteCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 		}
 		tx.Commit()
 
-		// message, _ := json.Marshal(map[string]interface{}{
-		// 	"event": "deleteCounter",
-		// 	"data":  id,
-		// })
-		// hub.broadcast <- message
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "deleteCounter",
+			"data":  id,
+		})
+		hub.broadcast <- message
 
 		helpers.FormatSuccessResponse(c, map[string]string{"message": "Counter deleted successfully"})
 	}

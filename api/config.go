@@ -10,10 +10,10 @@ import (
 	"gorm.io/gorm"
 )
 
-func GetConfig(dbConn *gorm.DB) gin.HandlerFunc {
+func GetConfig(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var config models.Config
-		if err := dbConn.First(&config).Error; err != nil {
+		if err := db.First(&config).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				helpers.FormatErrorResponse(c, http.StatusNotFound, "Config not found")
 			} else {
@@ -25,7 +25,7 @@ func GetConfig(dbConn *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func SetLoginNotCmu(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
+func SetLoginNotCmu(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		body := new(struct {
 			LoginNotCmu bool `json:"loginNotCmu"`
@@ -35,7 +35,7 @@ func SetLoginNotCmu(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		if err := dbConn.Model(&models.Config{}).Where("id = ?", 1).Update("LoginNotCmu", body.LoginNotCmu).Error; err != nil {
+		if err := db.Model(&models.Config{}).Where("id = ?", 1).Update("LoginNotCmu", body.LoginNotCmu).Error; err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update config")
 			return
 		}

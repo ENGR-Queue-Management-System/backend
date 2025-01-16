@@ -74,7 +74,7 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, hub *Hub) {
 
 	r.POST("/subscribe", SaveSubscription(db))
 	r.POST("/send-notification", SendNotificationTrigger(db, hub))
-	r.GET("/test-send-noti", GetSubscription(db))
+	// r.GET("/test-send-noti", GetSubscription(db))
 
 	r.POST("/authentication", Authentication(db))
 
@@ -99,4 +99,7 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, hub *Hub) {
 	r.POST("/queue", CreateQueue(db, hub))
 	r.PUT("/queue/:id", UpdateQueue(db, hub))
 	r.DELETE("/queue/:id", DeleteQueue(db, hub))
+
+	r.GET("/feedback", GetFeedbackByUser(db))
+	r.POST("/feedback", CreateFeedback(db))
 }

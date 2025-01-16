@@ -183,7 +183,7 @@ func generateJWTToken(user interface{}, notAdmin bool) (string, error) {
 	return tokenString, nil
 }
 
-func Authentication(dbConn *gorm.DB) gin.HandlerFunc {
+func Authentication(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body AuthDTO
 		if err := c.Bind(&body); err != nil || body.Code == "" || body.RedirectURI == "" {
@@ -202,7 +202,7 @@ func Authentication(dbConn *gorm.DB) gin.HandlerFunc {
 		}
 
 		var user models.User
-		result := dbConn.Where("email = ?", basicInfo.CmuitAccount).First(&user)
+		result := db.Where("email = ?", basicInfo.CmuitAccount).First(&user)
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			if basicInfo.ItAccountTypeID == STUDENT.String() {
 				tokenString, err := generateJWTToken(*basicInfo, true)
@@ -229,7 +229,7 @@ func Authentication(dbConn *gorm.DB) gin.HandlerFunc {
 			user.LastNameTH = &basicInfo.LastnameTH
 			user.FirstNameEN = &basicInfo.FirstnameEN
 			user.LastNameEN = &basicInfo.LastnameEN
-			if err := dbConn.Save(&user).Error; err != nil {
+			if err := db.Save(&user).Error; err != nil {
 				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update user data")
 				return
 			}

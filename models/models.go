@@ -3,6 +3,8 @@ package models
 import (
 	"src/helpers"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 type Config struct {
@@ -67,13 +69,15 @@ type Queue struct {
 }
 
 type Feedback struct {
-	ID        int       `json:"id" gorm:"primaryKey;autoIncrement"`
-	UserID    int       `json:"userId" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
-	User      User      `json:"user" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
-	TopicID   int       `json:"topicId" gorm:"foreignKey:TopicID;constraint:OnDelete:CASCADE"`
-	Topic     Topic     `json:"topic" gorm:"foreignKey:TopicID;constraint:OnDelete:CASCADE"`
-	Feedback  string    `json:"feedback" gorm:"not null"`
-	CreatedAt time.Time `json:"createdAt" gorm:"default:current_timestamp"`
+	ID        int            `json:"id" gorm:"primaryKey;autoIncrement"`
+	UserID    int            `json:"userId" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
+	User      User           `json:"user" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
+	TopicID   int            `json:"topicId" gorm:"foreignKey:TopicID;constraint:OnDelete:CASCADE"`
+	Topic     Topic          `json:"topic" gorm:"foreignKey:TopicID;constraint:OnDelete:CASCADE"`
+	Rating    int            `json:"rating" gorm:"not null"`
+	Tags      pq.StringArray `json:"tags" gorm:"type:text[];default:'{}'"`
+	Feedback  *string        `json:"feedback" gorm:"size:255"`
+	CreatedAt time.Time      `json:"createdAt" gorm:"default:current_timestamp"`
 }
 
 type UserWithoutCounter struct {

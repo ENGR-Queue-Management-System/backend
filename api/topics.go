@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func GetTopics(dbConn *gorm.DB) gin.HandlerFunc {
+func GetTopics(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var topics []struct {
 			ID      int    `json:"id"`
@@ -20,7 +20,7 @@ func GetTopics(dbConn *gorm.DB) gin.HandlerFunc {
 			Code    string `json:"code"`
 			Waiting int    `json:"waiting"`
 		}
-		if err := dbConn.Table("topics").
+		if err := db.Table("topics").
 			Select("topics.id, topics.topic_th, topics.topic_en, topics.code, COUNT(queues.id) AS waiting").
 			Joins("LEFT JOIN queues ON queues.topic_id = topics.id AND queues.status IN (?, ?)", helpers.WAITING, helpers.IN_PROGRESS).
 			Group("topics.id").
@@ -33,7 +33,7 @@ func GetTopics(dbConn *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func CreateTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
+func CreateTopic(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body struct {
 			TopicTH string `json:"topicTH"`
@@ -46,7 +46,7 @@ func CreateTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 		}
 
 		var existingTopic models.Topic
-		if err := dbConn.Where("code = ?", body.Code).First(&existingTopic).Error; err == nil {
+		if err := db.Where("code = ?", body.Code).First(&existingTopic).Error; err == nil {
 			helpers.FormatErrorResponse(c, http.StatusConflict, fmt.Sprintf("The code '%v' already exists.", body.Code))
 			return
 		} else if err != gorm.ErrRecordNotFound {
@@ -59,7 +59,7 @@ func CreateTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 			TopicEN: body.TopicEN,
 			Code:    body.Code,
 		}
-		if err := dbConn.Create(&topic).Error; err != nil {
+		if err := db.Create(&topic).Error; err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to create topic")
 			return
 		}
@@ -74,7 +74,7 @@ func CreateTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 	}
 }
 
-func UpdateTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
+func UpdateTopic(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		var body struct {
@@ -88,14 +88,14 @@ func UpdateTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 		}
 
 		var topic models.Topic
-		if err := dbConn.First(&topic, id).Error; err != nil {
+		if err := db.First(&topic, id).Error; err != nil {
 			helpers.FormatErrorResponse(c, http.StatusNotFound, "Topic not found")
 			return
 		}
 
 		if body.Code != nil {
 			var existingTopic models.Topic
-			if err := dbConn.Where("code = ?", *body.Code).First(&existingTopic).Error; err == nil {
+			if err := db.Where("code = ?", *body.Code).First(&existingTopic).Error; err == nil {
 				helpers.FormatErrorResponse(c, http.StatusConflict, fmt.Sprintf("The code '%v' already exists.", *body.Code))
 				return
 			}
@@ -108,7 +108,7 @@ func UpdateTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 			topic.TopicEN = *body.TopicEN
 		}
 
-		if err := dbConn.Save(&topic).Error; err != nil {
+		if err := db.Save(&topic).Error; err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update topic")
 			return
 		}
@@ -123,10 +123,10 @@ func UpdateTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
 	}
 }
 
-func DeleteTopic(dbConn *gorm.DB, hub *Hub) gin.HandlerFunc {
+func DeleteTopic(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		if err := dbConn.Delete(&models.Topic{}, id).Error; err != nil {
+		if err := db.Delete(&models.Topic{}, id).Error; err != nil {
 			helpers.FormatErrorResponse(c, http.StatusNotFound, "Topic not found")
 			return
 		}

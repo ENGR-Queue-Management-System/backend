@@ -72,7 +72,7 @@ func GetStudentQueue(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		countWaitingAfterInProgress, err := FindWaitingQueue(db, int(topic.ID), int(queue.ID), topic.Code)
+		countWaitingAfterInProgress, err := FindWaitingQueue(db, int(topic.ID), int(queue.ID), topic.Code, []string{string(helpers.WAITING), string(helpers.IN_PROGRESS)})
 		if err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to count waiting queues")
 			return
@@ -189,7 +189,7 @@ func CreateQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		countWaitingAfterInProgress, err := FindWaitingQueue(db, body.Topic, queue.ID, topic.Code)
+		countWaitingAfterInProgress, err := FindWaitingQueue(db, body.Topic, queue.ID, topic.Code, []string{string(helpers.WAITING)})
 		if err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to count waiting queues")
 			return
@@ -319,10 +319,10 @@ func UpdateQueueFeedback(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func FindWaitingQueue(db *gorm.DB, topicID int, queueID int, topicCode string) (int, error) {
+func FindWaitingQueue(db *gorm.DB, topicID int, queueID int, topicCode string, status []string) (int, error) {
 	var count int64
 	if err := db.Model(&models.Queue{}).
-		Where("topic_id = ? AND status = ? AND id != ? AND no LIKE ?", topicID, helpers.WAITING, queueID, topicCode+"%").
+		Where("topic_id = ? AND status IN ? AND id != ? AND no LIKE ?", topicID, status, queueID, topicCode+"%").
 		Count(&count).Error; err != nil {
 		return 0, err
 	}

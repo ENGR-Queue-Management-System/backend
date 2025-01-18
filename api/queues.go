@@ -23,9 +23,11 @@ func GetQueues(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		counterID := c.Query("counter")
 
+		today := time.Now().Format("2006-01-02")
+
 		if counterID == "" {
 			var queues []models.Queue
-			if err := db.Preload("Topic").Find(&queues).Error; err != nil {
+			if err := db.Preload("Topic").Where("AND DATE(created_at) = ?", today).Find(&queues).Error; err != nil {
 				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch queues")
 				return
 			}
@@ -55,9 +57,11 @@ func GetStudentQueue(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		today := time.Now().Format("2006-01-02")
+
 		var queue models.Queue
 		var topic models.Topic
-		err := db.Preload("Topic").Where("firstname = ? AND lastname = ?", firstName, lastName).Order("created_at DESC, no DESC").First(&queue).Error
+		err := db.Preload("Topic").Where("firstname = ? AND lastname = ? AND DATE(created_at) = ?", firstName, lastName, today).Order("created_at DESC, no DESC").First(&queue).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				helpers.FormatSuccessResponse(c, map[string]interface{}{"queue": map[string]interface{}{}})

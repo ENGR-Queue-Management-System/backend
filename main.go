@@ -6,6 +6,7 @@ import (
 	"os"
 	"src/api"
 	"src/db"
+	"src/helpers"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -55,6 +56,7 @@ func main() {
 	})
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
+	router.Use(helpers.TimezoneMiddleware())
 
 	router.GET("/api", func(c *gin.Context) {
 		api.ServeWs(hub, c.Writer, c.Request)

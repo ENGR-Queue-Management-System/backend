@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
@@ -51,6 +52,19 @@ func ExtractToken(c *gin.Context) (*jwt.MapClaims, error) {
 	}
 
 	return &claims, nil
+}
+
+func TimezoneMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		location, err := time.LoadLocation("Asia/Bangkok")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load timezone"})
+			c.Abort()
+			return
+		}
+		time.Local = location
+		c.Next()
+	}
 }
 
 func Capitalize(s string) string {

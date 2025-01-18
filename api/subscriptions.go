@@ -94,25 +94,3 @@ func SendNotificationTrigger(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 		helpers.FormatSuccessResponse(c, map[string]string{"status": "notification sent"})
 	}
 }
-
-// func GetSubscription(db *gorm.DB) gin.HandlerFunc {
-// 	return func(c *gin.Context) {
-// 		var subscriptions []models.Subscription
-// 		err := db.Find(&subscriptions).Error
-// 		if err != nil {
-// 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, fmt.Sprintf("error retrieving subscriptions: %v", err))
-// 			return
-// 		}
-
-// 		var subscriptionList []map[string]string
-// 		for _, sub := range subscriptions {
-// 			subscription := map[string]string{
-// 				"firstName": sub.FirstName,
-// 				"lastName":  sub.LastName,
-// 			}
-// 			subscriptionList = append(subscriptionList, subscription)
-// 		}
-
-// 		helpers.FormatSuccessResponse(c, subscriptionList)
-// 	}
-// }

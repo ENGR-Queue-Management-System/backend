@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"src/helpers"
 	"src/models"
@@ -64,14 +63,6 @@ func SaveSubscription(db *gorm.DB) gin.HandlerFunc {
 }
 
 func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, hub *Hub) {
-	r.GET("/socket", func(c *gin.Context) {
-		message, _ := json.Marshal(map[string]interface{}{
-			"event": "trigger",
-		})
-		hub.broadcast <- message
-		helpers.FormatSuccessResponse(c, map[string]string{"message": "success"})
-	})
-
 	r.POST("/subscribe", SaveSubscription(db))
 	r.POST("/send-notification", SendNotificationTrigger(db, hub))
 

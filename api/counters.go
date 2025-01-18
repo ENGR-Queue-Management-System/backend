@@ -229,9 +229,12 @@ func UpdateCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 				Where("counter_id = ? AND status = ?", counter.ID, helpers.IN_PROGRESS).
 				First(&queue).Error
 			if err != nil {
-				tx.Rollback()
-				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch queue")
-				return
+				if err == gorm.ErrRecordNotFound {
+				} else {
+					tx.Rollback()
+					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch queue")
+					return
+				}
 			}
 			err = tx.Model(&models.Queue{}).
 				Where("id = ?", queue.ID).

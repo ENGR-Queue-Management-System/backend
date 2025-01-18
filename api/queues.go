@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"src/helpers"
@@ -61,7 +62,7 @@ func GetStudentQueue(db *gorm.DB) gin.HandlerFunc {
 
 		var queue models.Queue
 		var topic models.Topic
-		err := db.Preload("Topic").Where("firstname = ? AND lastname = ? AND DATE(created_at) = ? AND status != ?", firstName, lastName, today, helpers.CALLED).Order("created_at DESC, no DESC").First(&queue).Error
+		err := db.Preload("Topic").Where("firstname = ? AND lastname = ? AND DATE(created_at) = ? AND feedback = ?", firstName, lastName, today, false).Order("created_at DESC, no DESC").First(&queue).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				helpers.FormatSuccessResponse(c, map[string]interface{}{"queue": map[string]interface{}{}})
@@ -294,6 +295,27 @@ func DeleteQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 		hub.broadcast <- message
 
 		helpers.FormatSuccessResponse(c, map[string]string{"message": "Queue deleted successfully"})
+	}
+}
+
+func UpdateQueueFeedback(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		var queue models.Queue
+		if err := db.First(&queue, "id = ?", id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				helpers.FormatErrorResponse(c, http.StatusNotFound, "Queue not found")
+				return
+			}
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve queue")
+			return
+		}
+
+		if err := db.Model(&queue).Update("feedback", true).Error; err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update queue feedback")
+			return
+		}
+		helpers.FormatSuccessResponse(c, map[string]string{"message": "Queue updated successfully"})
 	}
 }
 

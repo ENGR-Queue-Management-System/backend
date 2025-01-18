@@ -65,6 +65,7 @@ type Queue struct {
 	Note      *string        `json:"note" gorm:"size:255"`
 	Status    helpers.STATUS `json:"status" gorm:"default:'WAITING';not null"`
 	CounterID *int           `json:"counterId" gorm:"foreignKey:CounterID;constraint:OnDelete:CASCADE"`
+	Feedback  bool           `json:"feedback" gorm:"default:false;not null"`
 	CreatedAt time.Time      `json:"createdAt" gorm:"default:current_timestamp"`
 }
 

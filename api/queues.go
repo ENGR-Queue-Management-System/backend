@@ -61,7 +61,7 @@ func GetStudentQueue(db *gorm.DB) gin.HandlerFunc {
 
 		var queue models.Queue
 		var topic models.Topic
-		err := db.Preload("Topic").Where("firstname = ? AND lastname = ? AND DATE(created_at) = ?", firstName, lastName, today).Order("created_at DESC, no DESC").First(&queue).Error
+		err := db.Preload("Topic").Where("firstname = ? AND lastname = ? AND DATE(created_at) = ? AND status != ?", firstName, lastName, today, helpers.CALLED).Order("created_at DESC, no DESC").First(&queue).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				helpers.FormatSuccessResponse(c, map[string]interface{}{"queue": map[string]interface{}{}})

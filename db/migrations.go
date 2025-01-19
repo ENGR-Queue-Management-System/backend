@@ -26,7 +26,7 @@ func CreateTables(db *gorm.DB) {
 		log.Println("Successfully migrated tables")
 	}
 
-	ResetSequences(db)
+	// ResetSequences(db)
 }
 
 func ResetSequences(db *gorm.DB) {
@@ -42,7 +42,7 @@ func ResetSequences(db *gorm.DB) {
 				FROM information_schema.columns AS columns
 				WHERE columns.column_default LIKE 'nextval%' AND columns.table_schema = 'public' 
 			LOOP
-				EXECUTE format('SELECT COALESCE(MAX(id), 0) FROM %I', table_name) INTO max_id;
+				EXECUTE format('SELECT COALESCE(MAX(id), 1) FROM %I', table_name) INTO max_id;
 				EXECUTE format(
 					'SELECT setval(pg_get_serial_sequence(''%I'', ''id''), %s, false)',
 					table_name, max_id

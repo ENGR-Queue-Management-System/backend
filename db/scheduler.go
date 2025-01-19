@@ -38,23 +38,35 @@ func UpdateCounterStatus(db *gorm.DB) error {
 		}
 	}()
 
+	var counterIDs []int
 	result := tx.Model(&models.Counter{}).
 		Where("time_closed BETWEEN ? AND ? AND status = ?", startTime, endTime, true).
-		Update("status", false)
+		Pluck("id", &counterIDs)
+	if result.Error != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to fetch counters: %v", result.Error)
+	}
 
+	if len(counterIDs) == 0 {
+		log.Println("No counters matched the criteria for status update")
+		tx.Rollback()
+		return nil
+	}
+
+	err := tx.Model(&models.Queue{}).
+		Where("counter_id IN ? AND status = ?", counterIDs, helpers.IN_PROGRESS).
+		Update("status", helpers.CALLED).Error
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to update queue status: %v", err)
+	}
+
+	result = tx.Model(&models.Counter{}).
+		Where("id IN ?", counterIDs).
+		Update("status", false)
 	if result.Error != nil {
 		tx.Rollback()
 		return fmt.Errorf("failed to update counter status: %v", result.Error)
-	}
-
-	if result.RowsAffected > 0 {
-		err := tx.Model(&models.Queue{}).
-			Where("counter_id IN (?) AND status = ?", tx.Model(&models.Counter{}).Select("id").Where("status = false"), helpers.IN_PROGRESS).
-			Update("status", helpers.CALLED).Error
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("failed to update queue status: %v", err)
-		}
 	}
 
 	if err := tx.Commit().Error; err != nil {

@@ -2,7 +2,6 @@ package helpers
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -56,10 +55,7 @@ func ExtractToken(c *gin.Context) (*jwt.MapClaims, error) {
 }
 
 func GetBangkokTime() time.Time {
-	loc, err := time.LoadLocation("Asia/Bangkok")
-	if err != nil {
-		log.Fatalf("failed to load Asia/Bangkok timezone: %v", err)
-	}
+	loc := time.FixedZone("Asia/Bangkok", 7*60*60)
 	return time.Now().In(loc)
 }
 

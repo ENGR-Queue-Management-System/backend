@@ -11,7 +11,7 @@ import (
 
 const (
 	writeWait      = 10 * time.Second
-	pongWait       = 5 * time.Minute
+	pongWait       = 10 * time.Minute
 	pingPeriod     = (pongWait * 9) / 10
 	maxMessageSize = 512
 )
@@ -106,7 +106,7 @@ func (c *Client) readPump() {
 }
 
 func (c *Client) writePump() {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
 		c.conn.Close()

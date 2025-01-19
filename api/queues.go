@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"src/helpers"
 	"src/models"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -24,7 +23,7 @@ func GetQueues(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		counterID := c.Query("counter")
 
-		today := time.Now().Format("2006-01-02")
+		today := helpers.GetBangkokTime().Format("2006-01-02")
 
 		if counterID == "" {
 			var queues []models.Queue
@@ -58,7 +57,7 @@ func GetStudentQueue(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		today := time.Now().Format("2006-01-02")
+		today := helpers.GetBangkokTime().Format("2006-01-02")
 
 		var queue models.Queue
 		var topic models.Topic
@@ -114,7 +113,7 @@ func CreateQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		today := time.Now().Format("2006-01-02")
+		today := helpers.GetBangkokTime().Format("2006-01-02")
 
 		var lastQueueNo string
 		err = db.Model(&models.Queue{}).Where("topic_id = ? AND DATE(created_at) = ?", body.Topic, today).Order("no DESC").Limit(1).Pluck("no", &lastQueueNo).Error

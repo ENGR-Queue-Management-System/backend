@@ -23,7 +23,7 @@ func StartCounterStatusUpdater(db *gorm.DB, interval time.Duration) {
 }
 
 func UpdateCounterStatus(db *gorm.DB) error {
-	now := time.Now()
+	now := helpers.GetBangkokTime()
 	startTime := now.Add(-1 * time.Minute)
 	endTime := now.Add(1 * time.Minute)
 
@@ -78,7 +78,7 @@ func StartQueueCleanup(db *gorm.DB, interval time.Duration) {
 }
 
 func DeleteOldQueueEntries(db *gorm.DB) error {
-	thresholdDate := time.Now().AddDate(0, 0, -30)
+	thresholdDate := helpers.GetBangkokTime().AddDate(0, 0, -30)
 
 	result := db.Where("created_at < ?", thresholdDate).Delete(&models.Queue{})
 	if result.Error != nil {

@@ -2,8 +2,10 @@ package helpers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
@@ -51,6 +53,14 @@ func ExtractToken(c *gin.Context) (*jwt.MapClaims, error) {
 	}
 
 	return &claims, nil
+}
+
+func GetBangkokTime() time.Time {
+	loc, err := time.LoadLocation("Asia/Bangkok")
+	if err != nil {
+		log.Fatalf("failed to load Asia/Bangkok timezone: %v", err)
+	}
+	return time.Now().In(loc)
 }
 
 func Capitalize(s string) string {

@@ -29,11 +29,11 @@ func main() {
 		sqlDB.Close()
 	}()
 
-	db.StartCounterStatusUpdater(dbConn, time.Minute)
-	db.StartQueueCleanup(dbConn, 24*time.Hour)
-
 	hub := api.NewHub()
 	go hub.Run()
+
+	db.StartCounterStatusUpdater(dbConn, time.Minute, hub)
+	db.StartQueueCleanup(dbConn, 24*time.Hour)
 
 	router := gin.Default()
 	router.Use(func(c *gin.Context) {

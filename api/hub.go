@@ -38,6 +38,10 @@ func NewHub() *Hub {
 	}
 }
 
+func (h *Hub) Broadcast(message []byte) {
+	h.broadcast <- message
+}
+
 func (h *Hub) Run() {
 	for {
 		select {

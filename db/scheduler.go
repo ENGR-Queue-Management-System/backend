@@ -1,8 +1,10 @@
 package db
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"src/api"
 	"src/helpers"
 	"src/models"
 	"time"
@@ -10,10 +12,10 @@ import (
 	"gorm.io/gorm"
 )
 
-func StartCounterStatusUpdater(db *gorm.DB, interval time.Duration) {
+func StartCounterStatusUpdater(db *gorm.DB, interval time.Duration, hub *api.Hub) {
 	go func() {
 		for {
-			err := UpdateCounterStatus(db)
+			err := UpdateCounterStatus(db, hub)
 			if err != nil {
 				log.Printf("Error updating counter status: %v", err)
 			}
@@ -22,7 +24,7 @@ func StartCounterStatusUpdater(db *gorm.DB, interval time.Duration) {
 	}()
 }
 
-func UpdateCounterStatus(db *gorm.DB) error {
+func UpdateCounterStatus(db *gorm.DB, hub *api.Hub) error {
 	now := helpers.GetBangkokTime()
 	startTime := now.Add(-1 * time.Minute)
 	endTime := now.Add(1 * time.Minute)
@@ -48,12 +50,53 @@ func UpdateCounterStatus(db *gorm.DB) error {
 	}
 
 	if result.RowsAffected > 0 {
-		err := tx.Model(&models.Queue{}).
-			Where("counter_id IN (?) AND status = ?", tx.Model(&models.Counter{}).Select("id").Where("status = false"), helpers.IN_PROGRESS).
-			Update("status", helpers.CALLED).Error
+		var updatedCounterIDs []int
+		err := tx.Model(&models.Counter{}).Where("time_closed BETWEEN ? AND ? AND status = ?", startTime, endTime, false).
+			Pluck("id", &updatedCounterIDs).Error
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to fetch updated counters: %v", err)
+		}
+
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "updateCounterStatus",
+			"data":  updatedCounterIDs,
+		})
+		hub.Broadcast(message)
+
+		var affectedQueue []models.Queue
+		err = tx.Model(&models.Queue{}).
+			Where("counter_id IN (?) AND status = ?",
+				tx.Model(&models.Counter{}).Select("id").Where("status = false"),
+				helpers.IN_PROGRESS).
+			Updates(map[string]interface{}{"status": helpers.CALLED}).
+			Find(&affectedQueue).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
 			tx.Rollback()
 			return fmt.Errorf("failed to update queue status: %v", err)
+		}
+
+		for _, queue := range affectedQueue {
+			userIdentifier := map[string]string{
+				"firstName": queue.Firstname,
+				"lastName":  queue.Lastname,
+			}
+			q := queue
+			go func() {
+				message := map[string]string{
+					"title": "Let's review your recent help!",
+					"body":  "Was the service okay? Tap here to review.",
+				}
+				messageJSON, err := json.Marshal(message)
+				if err != nil {
+					log.Printf("Error creating notification message for queue %d: %v", q.ID, err)
+					return
+				}
+				err = api.SendPushNotification(db, hub, string(messageJSON), userIdentifier, nil)
+				if err != nil {
+					log.Printf("Error sending notification for queue %d: %v", q.ID, err)
+				}
+			}()
 		}
 	}
 

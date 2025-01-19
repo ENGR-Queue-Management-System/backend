@@ -51,7 +51,7 @@ func UpdateCounterStatus(db *gorm.DB) error {
 		err := tx.Model(&models.Queue{}).
 			Where("counter_id IN (?) AND status = ?", tx.Model(&models.Counter{}).Select("id").Where("status = false"), helpers.IN_PROGRESS).
 			Update("status", helpers.CALLED).Error
-		if err != nil {
+		if err != nil && err != gorm.ErrRecordNotFound {
 			tx.Rollback()
 			return fmt.Errorf("failed to update queue status: %v", err)
 		}

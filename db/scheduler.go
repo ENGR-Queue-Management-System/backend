@@ -15,11 +15,13 @@ import (
 func StartCounterStatusUpdater(db *gorm.DB, interval time.Duration, hub *api.Hub) {
 	go func() {
 		for {
+			now := time.Now()
+			nextTick := now.Truncate(time.Second).Add(interval)
 			err := UpdateCounterStatus(db, hub)
 			if err != nil {
 				log.Printf("Error updating counter status: %v", err)
 			}
-			time.Sleep(interval)
+			time.Sleep(time.Until(nextTick))
 		}
 	}()
 }

@@ -51,9 +51,9 @@ func UpdateCounterStatus(db *gorm.DB, hub *api.Hub) error {
 
 	if result.RowsAffected > 0 {
 		var updatedCounterIDs []int
-		err := tx.Model(&models.Counter{}).Where("time_closed BETWEEN ? AND ? AND status = ?", startTime, endTime, false).
-			Pluck("id", &updatedCounterIDs).Error
-		if err != nil {
+		if err := tx.Model(&models.Counter{}).
+			Where("time_closed BETWEEN ? AND ? AND status = ?", startTime, endTime, false).
+			Pluck("id", &updatedCounterIDs).Error; err != nil {
 			tx.Rollback()
 			return fmt.Errorf("failed to fetch updated counters: %v", err)
 		}
@@ -65,38 +65,46 @@ func UpdateCounterStatus(db *gorm.DB, hub *api.Hub) error {
 		hub.Broadcast(message)
 
 		var affectedQueue []models.Queue
-		err = tx.Model(&models.Queue{}).
-			Where("counter_id IN (?) AND status = ?",
-				tx.Model(&models.Counter{}).Select("id").Where("status = false"),
-				helpers.IN_PROGRESS).
-			Updates(map[string]interface{}{"status": helpers.CALLED}).
+		err := tx.Model(&models.Queue{}).
+			Where("counter_id IN (?) AND status = ?", updatedCounterIDs, helpers.IN_PROGRESS).
 			Find(&affectedQueue).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
 			tx.Rollback()
 			return fmt.Errorf("failed to update queue status: %v", err)
 		}
-
+		result := tx.Model(&models.Queue{}).
+			Where("id IN (?)", getQueueIDs(affectedQueue)).
+			Updates(map[string]interface{}{"status": helpers.CALLED})
+		if result.Error != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to update queue status: %v", result.Error)
+		}
 		for _, queue := range affectedQueue {
+			message := map[string]interface{}{
+				"title": map[string]string{
+					"en": "Let's review your recent help!",
+					"th": "มารีวิวการบริการที่คุณได้รับกันเถอะ!",
+				},
+				"body": map[string]string{
+					"en": "Was the service okay? Tap here to review.",
+					"th": "การให้บริการโอเคไหม? แตะที่นี่เพื่อให้คะแนนเลย!",
+				},
+			}
 			userIdentifier := map[string]string{
 				"firstName": queue.Firstname,
 				"lastName":  queue.Lastname,
 			}
-			q := queue
-			go func() {
-				message := map[string]string{
-					"title": "Let's review your recent help!",
-					"body":  "Was the service okay? Tap here to review.",
-				}
+			go func(queue models.Queue) {
 				messageJSON, err := json.Marshal(message)
 				if err != nil {
-					log.Printf("Error creating notification message for queue %d: %v", q.ID, err)
+					log.Printf("Error creating notification message for queue %d: %v", queue.ID, err)
 					return
 				}
 				err = api.SendPushNotification(db, hub, string(messageJSON), userIdentifier, nil)
 				if err != nil {
-					log.Printf("Error sending notification for queue %d: %v", q.ID, err)
+					log.Printf("Error sending notification for queue %d: %v", queue.ID, err)
 				}
-			}()
+			}(queue)
 		}
 	}
 
@@ -106,6 +114,14 @@ func UpdateCounterStatus(db *gorm.DB, hub *api.Hub) error {
 
 	log.Printf("Successfully updated %d counters' status", result.RowsAffected)
 	return nil
+}
+
+func getQueueIDs(queues []models.Queue) []int {
+	ids := make([]int, len(queues))
+	for i, q := range queues {
+		ids[i] = q.ID
+	}
+	return ids
 }
 
 func StartQueueCleanup(db *gorm.DB, interval time.Duration) {

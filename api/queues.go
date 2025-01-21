@@ -282,6 +282,11 @@ func UpdateQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 func DeleteQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
+		var queue models.Queue
+		if err := db.First(&queue, id).Error; err != nil {
+			helpers.FormatErrorResponse(c, http.StatusNotFound, "Queue not found")
+			return
+		}
 		if err := db.Delete(&models.Queue{}, id).Error; err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to delete queue")
 			return
@@ -289,7 +294,7 @@ func DeleteQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 
 		message, _ := json.Marshal(map[string]interface{}{
 			"event": "deleteQueue",
-			"data":  id,
+			"data":  queue,
 		})
 		hub.broadcast <- message
 

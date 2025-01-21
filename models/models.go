@@ -15,6 +15,7 @@ type Config struct {
 type Subscription struct {
 	FirstName string `json:"firstName" gorm:"primaryKey;size:100"`
 	LastName  string `json:"lastName" gorm:"primaryKey;size:100"`
+	Platform  string `json:"platform" gorm:"primaryKey;size:50"`
 	Endpoint  string `json:"endpoint" gorm:"not null"`
 	Auth      string `json:"auth" gorm:"not null"`
 	P256dh    string `json:"p256dh" gorm:"not null"`

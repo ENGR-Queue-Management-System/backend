@@ -28,14 +28,15 @@ func SaveSubscription(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		var subscriptionPayload struct {
+		var body struct {
+			Platform string `json:"platform"`
 			Endpoint string `json:"endpoint"`
 			Keys     struct {
 				Auth   string `json:"auth"`
 				P256dh string `json:"p256dh"`
 			} `json:"keys"`
 		}
-		if err := c.ShouldBindJSON(&subscriptionPayload); err != nil {
+		if err := c.ShouldBindJSON(&body); err != nil {
 			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid JSON payload: "+err.Error())
 			return
 		}
@@ -43,13 +44,14 @@ func SaveSubscription(db *gorm.DB) gin.HandlerFunc {
 		subscription := models.Subscription{
 			FirstName: firstName,
 			LastName:  lastName,
-			Endpoint:  subscriptionPayload.Endpoint,
-			Auth:      subscriptionPayload.Keys.Auth,
-			P256dh:    subscriptionPayload.Keys.P256dh,
+			Platform:  body.Platform,
+			Endpoint:  body.Endpoint,
+			Auth:      body.Keys.Auth,
+			P256dh:    body.Keys.P256dh,
 		}
 		err = db.Clauses(
 			clause.OnConflict{
-				Columns:   []clause.Column{{Name: "first_name"}, {Name: "last_name"}},
+				Columns:   []clause.Column{{Name: "first_name"}, {Name: "last_name"}, {Name: "platform"}},
 				DoUpdates: clause.AssignmentColumns([]string{"endpoint", "auth", "p256dh"}),
 			},
 		).Create(&subscription).Error

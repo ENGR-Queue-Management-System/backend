@@ -23,11 +23,14 @@ func GetQueues(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		counterID := c.Query("counter")
 
-		today := helpers.GetBangkokTime().Format("2006-01-02")
+		startOfDay, endOfDay := helpers.GetStartAndEndOfDay()
 
 		if counterID == "" {
 			var queues []models.Queue
-			if err := db.Preload("Topic").Where("AND DATE(created_at) = ?", today).Find(&queues).Error; err != nil {
+			if err := db.Preload("Topic").
+				Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay).
+				Order("created_at ASC, no ASC").
+				Find(&queues).Error; err != nil {
 				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch queues")
 				return
 			}
@@ -57,11 +60,13 @@ func GetStudentQueue(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		today := helpers.GetBangkokTime().Format("2006-01-02")
+		startOfDay, endOfDay := helpers.GetStartAndEndOfDay()
 
 		var queue models.Queue
 		var topic models.Topic
-		err := db.Preload("Topic").Where("firstname = ? AND lastname = ? AND DATE(created_at) = ? AND feedback = ?", firstName, lastName, today, false).Order("created_at DESC, no DESC").First(&queue).Error
+		err := db.Preload("Topic").
+			Where("firstname = ? AND lastname = ? AND created_at >= ? AND created_at < ? AND feedback = ?", firstName, lastName, startOfDay, endOfDay, false).
+			Order("created_at DESC, no DESC").First(&queue).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				helpers.FormatSuccessResponse(c, map[string]interface{}{"queue": map[string]interface{}{}})
@@ -113,10 +118,12 @@ func CreateQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		today := helpers.GetBangkokTime().Format("2006-01-02")
+		startOfDay, endOfDay := helpers.GetStartAndEndOfDay()
 
 		var lastQueueNo string
-		err = db.Model(&models.Queue{}).Where("topic_id = ? AND DATE(created_at) = ?", body.Topic, today).Order("no DESC").Limit(1).Pluck("no", &lastQueueNo).Error
+		err = db.Model(&models.Queue{}).
+			Where("topic_id = ? AND created_at >= ? AND created_at < ?", body.Topic, startOfDay, endOfDay).
+			Order("no DESC").Limit(1).Pluck("no", &lastQueueNo).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to retrieve the last queue number")
 			return

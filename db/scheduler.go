@@ -139,7 +139,8 @@ func StartQueueCleanup(db *gorm.DB, interval time.Duration) {
 }
 
 func DeleteOldQueueEntries(db *gorm.DB) error {
-	thresholdDate := helpers.GetBangkokTime().AddDate(0, 0, -30)
+	startOfDay, _ := helpers.GetStartAndEndOfDay()
+	thresholdDate := startOfDay.AddDate(0, 0, -30)
 
 	result := db.Where("created_at < ?", thresholdDate).Delete(&models.Queue{})
 	if result.Error != nil {

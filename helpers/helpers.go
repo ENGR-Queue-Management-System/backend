@@ -59,6 +59,14 @@ func GetBangkokTime() time.Time {
 	return time.Now().In(loc)
 }
 
+func GetStartAndEndOfDay() (time.Time, time.Time) {
+	t := GetBangkokTime()
+	startOfDay := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
+
+	return startOfDay, endOfDay
+}
+
 func Capitalize(s string) string {
 	if len(s) > 0 {
 		return strings.ToUpper(string(s[0])) + s[1:]

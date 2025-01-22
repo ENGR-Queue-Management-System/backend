@@ -91,6 +91,7 @@ func UpdateCounterStatus(db *gorm.DB, hub *api.Hub) error {
 					"en": "Was the service okay? Tap here to review.",
 					"th": "การให้บริการโอเคไหม? แตะที่นี่เพื่อให้คะแนนเลย!",
 				},
+				"url": "/student-dashboard/queue",
 			}
 			userIdentifier := map[string]string{
 				"firstName": queue.Firstname,

@@ -12,18 +12,17 @@ import (
 
 func GetFeedbackByUser(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		claims, err := helpers.ExtractToken(c)
-		if err != nil {
-			helpers.FormatErrorResponse(c, http.StatusUnauthorized, err.Error())
+		userClaims, ok := helpers.ExtractClaims(c)
+		if !ok {
 			return
 		}
-		email, ok := (*claims)["email"].(string)
+		email, ok := userClaims["email"].(string)
 		if !ok || email == "" {
 			helpers.FormatErrorResponse(c, http.StatusUnauthorized, "Email claim is missing or invalid in token")
 			return
 		}
 		var user models.User
-		err = db.Where("email = ?", email).First(&user).Error
+		err := db.Where("email = ?", email).First(&user).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				helpers.FormatErrorResponse(c, http.StatusNotFound, "User not found")

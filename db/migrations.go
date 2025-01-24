@@ -19,6 +19,7 @@ func CreateTables(db *gorm.DB) {
 		&models.CounterTopic{},
 		&models.Queue{},
 		&models.Feedback{},
+		&models.NotiSchedule{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to auto-migrate models: %v", err)

@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"src/helpers"
+	"src/middleware"
 	"src/models"
 
 	"github.com/gin-gonic/gin"
@@ -12,17 +13,16 @@ import (
 
 func SaveSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		claims, err := helpers.ExtractToken(c)
-		if err != nil {
-			helpers.FormatErrorResponse(c, http.StatusUnauthorized, err.Error())
+		userClaims, ok := helpers.ExtractClaims(c)
+		if !ok {
 			return
 		}
-		firstName, ok := (*claims)["firstName"].(string)
+		firstName, ok := userClaims["firstName"].(string)
 		if !ok {
 			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid firstName in token")
 			return
 		}
-		lastName, ok := (*claims)["lastName"].(string)
+		lastName, ok := userClaims["lastName"].(string)
 		if !ok {
 			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid lastName in token")
 			return
@@ -49,7 +49,7 @@ func SaveSubscription(db *gorm.DB) gin.HandlerFunc {
 			Auth:      body.Keys.Auth,
 			P256dh:    body.Keys.P256dh,
 		}
-		err = db.Clauses(
+		err := db.Clauses(
 			clause.OnConflict{
 				Columns:   []clause.Column{{Name: "first_name"}, {Name: "last_name"}, {Name: "platform"}},
 				DoUpdates: clause.AssignmentColumns([]string{"endpoint", "auth", "p256dh"}),
@@ -65,34 +65,43 @@ func SaveSubscription(db *gorm.DB) gin.HandlerFunc {
 }
 
 func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, hub *Hub) {
-	r.POST("/subscribe", SaveSubscription(db))
-	r.POST("/send-notification", SendNotificationTrigger(db, hub))
 
 	r.POST("/authentication", Authentication(db))
-
 	r.GET("/config", GetConfig(db))
-	r.PUT("/config/login-not-cmu", SetLoginNotCmu(db, hub))
-
-	r.GET("/user", GetUserInfo(db))
 
 	r.GET("/counter", GetCounters(db))
-	r.POST("/counter", CreateCounter(db, hub))
-	r.PUT("/counter/:id", UpdateCounter(db, hub))
-	r.DELETE("/counter/:id", DeleteCounter(db, hub))
-
 	r.GET("/topic", GetTopics(db))
-	r.POST("/topic", CreateTopic(db, hub))
-	r.PUT("/topic/:id", UpdateTopic(db, hub))
-	r.DELETE("/topic/:id", DeleteTopic(db, hub))
 
-	r.GET("/queue", GetQueues(db))
-	r.GET("/queue/student", GetStudentQueue(db))
-	r.GET("/queue/called", GetCalledQueues(db))
-	r.PUT("/queue/feedback/:id", UpdateQueueFeedback(db))
-	r.POST("/queue", CreateQueue(db, hub))
-	r.PUT("/queue/:id", UpdateQueue(db, hub))
-	r.DELETE("/queue/:id", DeleteQueue(db, hub))
+	protected := r.Group("/")
+	protected.Use(middleware.AuthRequired())
+	{
+		protected.POST("/subscribe", SaveSubscription(db))
+		protected.POST("/send-notification", SendNotificationTrigger(db, hub))
 
-	r.GET("/feedback", GetFeedbackByUser(db))
-	r.POST("/feedback", CreateFeedback(db))
+		protected.GET("/user", GetUserInfo(db))
+
+		protected.PUT("/config/login-not-cmu", SetLoginNotCmu(db, hub))
+
+		protected.POST("/counter", CreateCounter(db, hub))
+		protected.PUT("/counter/:id", UpdateCounter(db, hub))
+		protected.DELETE("/counter/:id", DeleteCounter(db, hub))
+
+		protected.POST("/topic", CreateTopic(db, hub))
+		protected.PUT("/topic/:id", UpdateTopic(db, hub))
+		protected.DELETE("/topic/:id", DeleteTopic(db, hub))
+
+		protected.GET("/queue", GetQueues(db))
+		protected.GET("/queue/student", GetStudentQueue(db))
+		protected.GET("/queue/called", GetCalledQueues(db))
+		protected.PUT("/queue/feedback/:id", UpdateQueueFeedback(db))
+		protected.POST("/queue", CreateQueue(db, hub))
+		protected.PUT("/queue/:id", UpdateQueue(db, hub))
+		protected.DELETE("/queue/:id", DeleteQueue(db, hub))
+
+		protected.GET("/feedback", GetFeedbackByUser(db))
+		protected.POST("/feedback", CreateFeedback(db))
+
+		protected.GET("/noti-schedule", GetNotiSchedule(db))
+		protected.POST("/noti-schedule", CreateNotiSchedule(db))
+	}
 }

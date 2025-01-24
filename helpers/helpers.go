@@ -1,7 +1,7 @@
 package helpers
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -32,26 +32,37 @@ func FormatErrorResponse(c *gin.Context, statusCode int, data interface{}) {
 			response["message"] = data
 		}
 	}
-	c.JSON(statusCode, response)
+	c.AbortWithStatusJSON(statusCode, response)
 }
 
-func ExtractToken(c *gin.Context) (*jwt.MapClaims, error) {
-	authHeader := c.GetHeader("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return nil, fmt.Errorf("Invalid authorization header")
-	}
-
-	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+func VerifyToken(tokenString string) (jwt.MapClaims, error) {
 	token, _, err := jwt.NewParser().ParseUnverified(tokenString, jwt.MapClaims{})
 	if err != nil {
-		return nil, fmt.Errorf("Invalid token")
-	}
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return nil, fmt.Errorf("Invalid claims in token")
+		return nil, errors.New("Invalid token")
 	}
 
-	return &claims, nil
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("Invalid claims in token")
+	}
+
+	return claims, nil
+}
+
+func ExtractClaims(c *gin.Context) (jwt.MapClaims, bool) {
+	claims, exists := c.Get("claims")
+	if !exists {
+		FormatErrorResponse(c, http.StatusUnauthorized, "Unauthorized")
+		return nil, false
+	}
+
+	userClaims, ok := claims.(jwt.MapClaims)
+	if !ok {
+		FormatErrorResponse(c, http.StatusUnauthorized, "Invalid token")
+		return nil, false
+	}
+
+	return userClaims, true
 }
 
 func GetBangkokTime() time.Time {

@@ -156,22 +156,21 @@ func CreateQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			firstName = *body.FirstName
 			lastName = *body.LastName
 		} else {
-			claims, err := helpers.ExtractToken(c)
-			if err != nil {
-				helpers.FormatErrorResponse(c, http.StatusUnauthorized, err.Error())
+			userClaims, ok := helpers.ExtractClaims(c)
+			if !ok {
 				return
 			}
-			firstNameClaim, ok := (*claims)["firstName"].(string)
+			firstNameClaim, ok := userClaims["firstName"].(string)
 			if !ok {
 				helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid firstName in token")
 				return
 			}
-			lastNameClaim, ok := (*claims)["lastName"].(string)
+			lastNameClaim, ok := userClaims["lastName"].(string)
 			if !ok {
 				helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid lastName in token")
 				return
 			}
-			studentIDClaim, ok := (*claims)["studentId"].(string)
+			studentIDClaim, ok := userClaims["studentId"].(string)
 			if !ok {
 				helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid studentId in token")
 				return

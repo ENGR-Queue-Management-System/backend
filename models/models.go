@@ -82,6 +82,17 @@ type Feedback struct {
 	CreatedAt time.Time      `json:"createdAt" gorm:"default:current_timestamp"`
 }
 
+type NotiSchedule struct {
+	Topic       string         `json:"topic" gorm:"primaryKey;size:100"`
+	Title       string         `json:"title" gorm:"size:255;not null"`
+	Body        string         `json:"body" gorm:"size:255;not null"`
+	StartDate   time.Time      `json:"startDate" gorm:"not null"`
+	Time        pq.StringArray `json:"time" gorm:"type:time(3)[];default:'{}'"`
+	RepeatEvery int            `json:"repeatEvery" gorm:"not null"`
+	RepeatUnit  string         `json:"repeatUnit" gorm:"size:50;not null"`
+	RepeatDays  pq.StringArray `json:"repeatDays" gorm:"type:text[];default:'{}'"`
+}
+
 type UserWithoutCounter struct {
 	ID          int     `json:"id"`
 	FirstNameTH *string `json:"firstNameTH"`

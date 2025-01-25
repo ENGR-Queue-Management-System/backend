@@ -84,7 +84,8 @@ type Feedback struct {
 }
 
 type NotiSchedule struct {
-	Topic       string         `json:"topic" gorm:"primaryKey;size:100"`
+	ID          int            `json:"id" gorm:"primaryKey;autoIncrement"`
+	Topic       string         `json:"topic" gorm:"unique;size:100"`
 	Title       string         `json:"title" gorm:"size:255;not null"`
 	Body        string         `json:"body" gorm:"size:255;not null"`
 	StartDate   time.Time      `json:"startDate" gorm:"not null"`

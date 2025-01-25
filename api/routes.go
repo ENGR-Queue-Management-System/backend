@@ -104,5 +104,7 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, hub *Hub) {
 
 		protected.GET("/noti-schedule", GetNotiSchedule(db))
 		protected.POST("/noti-schedule", CreateNotiSchedule(db))
+		protected.PUT("/noti-schedule/:id", UpdateNotiSchedule(db))
+		protected.DELETE("/noti-schedule/:id", DeleteNotiSchedule(db))
 	}
 }

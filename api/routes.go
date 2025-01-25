@@ -71,6 +71,7 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, hub *Hub) {
 
 	r.GET("/counter", GetCounters(db))
 	r.GET("/topic", GetTopics(db))
+	r.POST("/queue", CreateQueue(db, hub))
 
 	protected := r.Group("/")
 	protected.Use(middleware.AuthRequired())
@@ -81,6 +82,7 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, hub *Hub) {
 		protected.GET("/user", GetUserInfo(db))
 
 		protected.PUT("/config/login-not-cmu", SetLoginNotCmu(db, hub))
+		protected.PUT("/config/audio", SetAudio(db, hub))
 
 		protected.POST("/counter", CreateCounter(db, hub))
 		protected.PUT("/counter/:id", UpdateCounter(db, hub))
@@ -94,7 +96,6 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, hub *Hub) {
 		protected.GET("/queue/student", GetStudentQueue(db))
 		protected.GET("/queue/called", GetCalledQueues(db))
 		protected.PUT("/queue/feedback/:id", UpdateQueueFeedback(db))
-		protected.POST("/queue", CreateQueue(db, hub))
 		protected.PUT("/queue/:id", UpdateQueue(db, hub))
 		protected.DELETE("/queue/:id", DeleteQueue(db, hub))
 

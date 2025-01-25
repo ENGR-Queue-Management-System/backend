@@ -8,8 +8,9 @@ import (
 )
 
 type Config struct {
-	ID          int  `json:"id" gorm:"primaryKey"`
-	LoginNotCmu bool `json:"loginNotCmu" gorm:"default:true;not null"`
+	ID          int    `json:"id" gorm:"primaryKey"`
+	LoginNotCmu bool   `json:"loginNotCmu" gorm:"default:true;not null"`
+	Audio       string `json:"audio" gorm:"size:20;default:'th';not null"`
 }
 
 type Subscription struct {

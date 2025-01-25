@@ -35,7 +35,7 @@ func SetLoginNotCmu(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			return
 		}
 
-		if err := db.Model(&models.Config{}).Where("id = ?", 1).Update("LoginNotCmu", body.LoginNotCmu).Error; err != nil {
+		if err := db.Model(&models.Config{}).Where("id = ?", 1).Update("login_not_cmu", body.LoginNotCmu).Error; err != nil {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update config")
 			return
 		}
@@ -46,6 +46,31 @@ func SetLoginNotCmu(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 		})
 		hub.broadcast <- message
 
-		helpers.FormatSuccessResponse(c, map[string]interface{}{"message": "Config updated successfully"})
+		helpers.FormatSuccessResponse(c, map[string]interface{}{"message": "LoginNotCmu updated successfully"})
+	}
+}
+
+func SetAudio(db *gorm.DB, hub *Hub) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		body := new(struct {
+			Audio string `json:"audio"`
+		})
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			return
+		}
+
+		if err := db.Model(&models.Config{}).Where("id = ?", 1).Update("audio", body.Audio).Error; err != nil {
+			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to update config")
+			return
+		}
+
+		message, _ := json.Marshal(map[string]interface{}{
+			"event": "setAudio",
+			"data":  body.Audio,
+		})
+		hub.broadcast <- message
+
+		helpers.FormatSuccessResponse(c, map[string]interface{}{"message": "Audio updated successfully"})
 	}
 }

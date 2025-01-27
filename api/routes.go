@@ -71,7 +71,17 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, hub *Hub) {
 
 	r.GET("/counter", GetCounters(db))
 	r.GET("/topic", GetTopics(db))
-	r.POST("/queue", CreateQueue(db, hub))
+
+	condition := func(c *gin.Context) bool {
+		var body ReserveDTO
+		if err := c.ShouldBindJSON(&body); err != nil {
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid request body")
+			return false
+		}
+		c.Set("parsedBody", body)
+		return body.FirstName == nil
+	}
+	r.POST("/queue", ConditionalMiddleware(middleware.AuthRequired(), condition), CreateQueue(db, hub))
 
 	protected := r.Group("/")
 	protected.Use(middleware.AuthRequired())
@@ -106,5 +116,14 @@ func RegisterRoutes(r *gin.RouterGroup, db *gorm.DB, hub *Hub) {
 		protected.POST("/noti-schedule", CreateNotiSchedule(db))
 		protected.PUT("/noti-schedule/:id", UpdateNotiSchedule(db))
 		protected.DELETE("/noti-schedule/:id", DeleteNotiSchedule(db))
+	}
+}
+
+func ConditionalMiddleware(middleware gin.HandlerFunc, condition func(c *gin.Context) bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if condition(c) {
+			middleware(c)
+		}
+		c.Next()
 	}
 }

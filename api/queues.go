@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"src/helpers"
+	"src/middleware"
 	"src/models"
 
 	"github.com/gin-gonic/gin"
@@ -105,8 +106,17 @@ func GetCalledQueues(db *gorm.DB) gin.HandlerFunc {
 
 func CreateQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var body ReserveDTO
-		if err := c.Bind(&body); err != nil || body.Topic == 0 {
+		rawBody, exists := c.Get("parsedBody")
+		if !exists {
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Request body not found")
+			return
+		}
+		body, ok := rawBody.(ReserveDTO)
+		if !ok {
+			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Failed to parse request body")
+			return
+		}
+		if body.Topic == 0 {
 			helpers.FormatErrorResponse(c, http.StatusBadRequest, "Invalid topic")
 			return
 		}
@@ -156,6 +166,7 @@ func CreateQueue(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			firstName = *body.FirstName
 			lastName = *body.LastName
 		} else {
+			middleware.AuthRequired()
 			userClaims, ok := helpers.ExtractClaims(c)
 			if !ok {
 				return

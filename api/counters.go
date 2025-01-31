@@ -24,10 +24,12 @@ func GetCounters(db *gorm.DB) gin.HandlerFunc {
 			helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch counters")
 			return
 		}
+		startOfDay, endOfDay := helpers.GetStartAndEndOfDay()
 		var response []models.CounterResponse
 		for _, counter := range counters {
 			var currentQueue *models.Queue
-			err := db.Where("status = ? AND counter_id = ?", helpers.IN_PROGRESS, counter.ID).First(&currentQueue).Error
+			err := db.Where("status != ? AND counter_id = ? AND created_at >= ? AND created_at < ?", helpers.WAITING, counter.ID, startOfDay, endOfDay).
+				Order("created_at ASC, no ASC").First(&currentQueue).Error
 			if err != nil {
 				if err == gorm.ErrRecordNotFound {
 					currentQueue = nil

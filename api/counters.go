@@ -117,7 +117,7 @@ func CreateCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 		if err == gorm.ErrRecordNotFound {
 			user = models.User{
 				Email:     body.Email,
-				CounterID: counter.ID,
+				CounterID: &counter.ID,
 			}
 			err = tx.Create(&user).Error
 			if err != nil {
@@ -126,7 +126,7 @@ func CreateCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 				return
 			}
 		} else {
-			user.CounterID = counter.ID
+			user.CounterID = &counter.ID
 			err = tx.Save(&user).Error
 			if err != nil {
 				tx.Rollback()
@@ -275,8 +275,23 @@ func UpdateCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 		}
 
 		if body.Email != nil {
+			var existingUser models.User
+			err := tx.Where("counter_id = ?", counter.ID).First(&existingUser).Error
+			if err != nil && err != gorm.ErrRecordNotFound {
+				tx.Rollback()
+				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to fetch current counter user")
+				return
+			}
+			if err == nil {
+				err = tx.Model(&existingUser).Update("counter_id", nil).Error
+				if err != nil {
+					tx.Rollback()
+					helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to detach previous user from counter")
+					return
+				}
+			}
 			var user models.User
-			err := tx.Where("email = ?", *body.Email).First(&user).Error
+			err = tx.Where("email = ?", *body.Email).First(&user).Error
 			if err != nil && err != gorm.ErrRecordNotFound {
 				tx.Rollback()
 				helpers.FormatErrorResponse(c, http.StatusInternalServerError, "Failed to check user")
@@ -285,7 +300,7 @@ func UpdateCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 			if err == gorm.ErrRecordNotFound {
 				user = models.User{
 					Email:     *body.Email,
-					CounterID: counter.ID,
+					CounterID: &counter.ID,
 				}
 				err = tx.Create(&user).Error
 				if err != nil {
@@ -294,7 +309,7 @@ func UpdateCounter(db *gorm.DB, hub *Hub) gin.HandlerFunc {
 					return
 				}
 			} else {
-				user.CounterID = counter.ID
+				user.CounterID = &counter.ID
 				err = tx.Save(&user).Error
 				if err != nil {
 					tx.Rollback()

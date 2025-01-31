@@ -202,7 +202,7 @@ func Authentication(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var user models.User
-		result := db.Where("email = ?", basicInfo.CmuitAccount).First(&user)
+		result := db.Where("email = ? AND counter_id IS NOT NULL", basicInfo.CmuitAccount).First(&user)
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			if basicInfo.ItAccountTypeID == STUDENT.String() {
 				tokenString, err := generateJWTToken(*basicInfo, true)

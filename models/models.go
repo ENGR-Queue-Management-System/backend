@@ -27,7 +27,7 @@ type Counter struct {
 	Counter    string  `json:"counter" gorm:"unique;not null"`
 	Status     bool    `json:"status" gorm:"default:false;not null"`
 	TimeClosed string  `json:"timeClosed" gorm:"type:time(3);default:'16:00:00';not null"`
-	User       *User   `json:"user" gorm:"foreignKey:CounterID;constraint:OnDelete:CASCADE"`
+	User       *User   `json:"user" gorm:"foreignKey:CounterID;constraint:OnDelete:SET NULL"`
 	Topics     []Topic `json:"topics" gorm:"many2many:counter_topics;constraint:OnDelete:CASCADE"`
 }
 
@@ -38,8 +38,8 @@ type User struct {
 	FirstNameEN *string `json:"firstNameEN" gorm:"size:100"`
 	LastNameEN  *string `json:"lastNameEN" gorm:"size:100"`
 	Email       string  `json:"email" gorm:"unique;size:100;not null"`
-	CounterID   int     `json:"counterId" gorm:"foreignKey:CounterID;constraint:OnDelete:CASCADE"`
-	Counter     Counter `json:"counter" gorm:"foreignKey:CounterID;constraint:OnDelete:CASCADE"`
+	CounterID   *int    `json:"counterId" gorm:"foreignKey:CounterID;constraint:OnDelete:SET NULL"`
+	Counter     Counter `json:"counter" gorm:"foreignKey:CounterID;constraint:OnDelete:SET NULL"`
 }
 
 type Topic struct {

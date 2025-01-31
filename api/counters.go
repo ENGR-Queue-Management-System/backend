@@ -29,7 +29,7 @@ func GetCounters(db *gorm.DB) gin.HandlerFunc {
 		for _, counter := range counters {
 			var currentQueue *models.Queue
 			err := db.Where("status != ? AND counter_id = ? AND created_at >= ? AND created_at < ?", helpers.WAITING, counter.ID, startOfDay, endOfDay).
-				Order("created_at ASC, no ASC").First(&currentQueue).Error
+				Order("created_at DESC, no DESC").First(&currentQueue).Error
 			if err != nil {
 				if err == gorm.ErrRecordNotFound {
 					currentQueue = nil
